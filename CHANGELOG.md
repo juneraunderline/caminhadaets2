@@ -1,5 +1,11 @@
 # Changes
 
+## 0.19-dev (prototype)
+
+- Show a pair of forearms and open hands as a transparent 2D overlay while walking.
+- Press E to inspect the nearest solid collision object up to 4.5 m ahead; the object description is written to the game log. This is diagnostic groundwork, not yet an interaction action.
+- The 0.18 stable branch is unchanged. This prototype is not yet validated in-game or against ETS2 1.61.1.9.
+
 ## 0.18
 
 - **Fixed: F9 left you looking at the cab, unable to see where you walked.** The game
