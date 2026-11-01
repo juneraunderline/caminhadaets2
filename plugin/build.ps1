@@ -103,6 +103,8 @@ $arguments += @(
     'gdi32.lib'
     'winmm.lib'
     '/DEF:src\takeawalk.def'
+    '/EXPORT:scs_telemetry_init'
+    '/EXPORT:scs_telemetry_shutdown'
     '/IMPLIB:build\takeawalk.lib'
 )
 $responseFile = Join-Path $out 'compile.rsp'
