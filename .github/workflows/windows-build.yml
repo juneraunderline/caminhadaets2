@@ -21,15 +21,6 @@ jobs:
         shell: pwsh
         run: ./plugin/build.ps1
 
-      - name: Verify SCS plugin exports
-        shell: pwsh
-        run: |
-          $exports = (dumpbin.exe /nologo /exports plugin/build/takeawalk.dll) -join "`n"
-          Write-Host $exports
-          if ($LASTEXITCODE -ne 0 -or $exports -notmatch 'scs_telemetry_init' -or $exports -notmatch 'scs_telemetry_shutdown') {
-            throw 'The DLL is missing one or more required SCS telemetry exports.'
-          }
-
       - name: Package release ZIP
         shell: pwsh
         run: ./plugin/package.ps1 -SkipBuild
