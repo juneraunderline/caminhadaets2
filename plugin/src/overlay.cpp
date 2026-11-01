@@ -332,6 +332,7 @@ void paint_hands(const HWND target)
 	const HBRUSH skin = CreateSolidBrush(skin_color);
 	const HBRUSH light_skin = CreateSolidBrush(skin_light);
 	const HGDIOBJ old_pen = SelectObject(dc, outline);
+	const HGDIOBJ old_brush = GetCurrentObject(dc, OBJ_BRUSH);
 
 	POINT left_sleeve[] = {{0,220},{0,154},{58,118},{151,174},{205,220}};
 	SelectObject(dc, sleeve);
@@ -364,6 +365,7 @@ void paint_hands(const HWND target)
 	MoveToEx(dc, 275, 190, NULL); LineTo(dc, 255, 201);
 
 	SelectObject(dc, old_pen);
+	SelectObject(dc, old_brush);
 	DeleteObject(outline);
 	DeleteObject(sleeve);
 	DeleteObject(cuff);
