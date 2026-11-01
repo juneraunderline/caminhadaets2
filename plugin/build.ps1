@@ -98,14 +98,6 @@ foreach ($source in $sources) {
     $arguments += ('src\' + $source.Name)
 }
 $arguments += @(
-    '/link'
-    'user32.lib'
-    'gdi32.lib'
-    'winmm.lib'
-    '/DEF:src\takeawalk.def'
-    '/EXPORT:scs_telemetry_init'
-    '/EXPORT:scs_telemetry_shutdown'
-    '/IMPLIB:build\takeawalk.lib'
 )
 $responseFile = Join-Path $out 'compile.rsp'
 Set-Content -LiteralPath $responseFile -Value $arguments -Encoding ASCII
@@ -115,8 +107,11 @@ $cmdLines = @(
     '@echo off'
     ('call "' + $vcvars + '" >nul')
     'if errorlevel 1 exit /b %errorlevel%'
-    ('cl.exe /nologo @"' + $responseFile + '"')
-    'exit /b %errorlevel%'
+    ('cl.exe /nologo @"' + $responseFile + '" /link user32.lib gdi32.lib winmm.lib /DEF:src\takeawalk.def /EXPORT:scs_telemetry_init /EXPORT:scs_telemetry_shutdown /IMPLIB:build\takeawalk.lib')
+    'if errorlevel 1 exit /b %errorlevel%'
+    'dumpbin.exe /nologo /exports build\takeawalk.dll > build\exports.txt'
+    'if errorlevel 1 exit /b %errorlevel%'
+    'exit /b 0'
 )
 Set-Content -LiteralPath $cmdFile -Value $cmdLines -Encoding ASCII
 
@@ -133,7 +128,11 @@ finally {
 
 $dll = Join-Path $out 'takeawalk.dll'
 if (-not (Test-Path -LiteralPath $dll)) { throw 'MSVC returned success but takeawalk.dll was not created.' }
-Write-Host "Build successful: $dll"
+$exports = Get-Content -LiteralPath (Join-Path $out 'exports.txt') -Raw
+if ($exports -notmatch 'scs_telemetry_init' -or $exports -notmatch 'scs_telemetry_shutdown') {
+    throw 'The DLL was linked without the required SCS telemetry exports. Build stopped before packaging.'
+}
+Write-Host "Build successful and SCS exports verified: $dll"
 
 if ($Install) {
     if (-not (Test-GameDirectory $GameDir)) {
