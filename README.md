@@ -7,11 +7,11 @@ Park, set the parking brake, press **F9**, and you are standing next to the driv
 door. Walk, run, crouch and jump anywhere you like, then come back to the door and
 press F9 again to get in.
 
-**Status:** version 0.18. First-person walking is complete. Third person is planned.
+**Status:** version 0.18. The source is configured for the 1.61.1.1 game build. First-person walking is implemented; third person is planned. The DLL has not been validated against other ETS2 builds.
 
 ## What you need
 
-- Euro Truck Simulator 2 **1.61.1.1**, Windows, 64-bit. Tested with DirectX 11.
+- Euro Truck Simulator 2 **1.61.1.1**, Windows, 64-bit. Tested with DirectX 11. Other patch builds, including 1.61.1.9, must be treated as unverified until tested in-game.
 - Single player. It has not been tried with TruckersMP or Convoy, and it changes how
   the game behaves, so do not use it in multiplayer.
 
@@ -24,7 +24,7 @@ crash the game at start, until a new release is made. If that happens, remove it
 ## Install
 
 1. Download `takeawalk-<version>.zip` from the
-   [Releases](https://github.com/adamvirtualspace-lab/takeawalk/releases) page.
+   [Releases](https://github.com/juneraunderline/caminhadaets2/releases) page.
 2. Close the game and extract the whole zip.
 3. Double-click `install.bat`. It finds the game through Steam and copies the files
    into the game's `bin\win_x64\plugins` folder. If it cannot find the game it asks
@@ -111,7 +111,7 @@ Run `uninstall.bat` from the zip, or delete `takeawalk.dll`, `takeawalk.ini` and
 
 ## If something does not work
 
-The game's log says what the plugin did. Open
+The game's log says what the plugin did. The build workflow also runs automatically on pushes to `main`; its DLL and ZIP are available under the workflow run's **Artifacts** when compilation succeeds. Open
 `Documents\Euro Truck Simulator 2\game.log.txt` and search for `takeawalk`.
 
 - No `takeawalk` lines at all: the files are not in `bin\win_x64\plugins` of the
