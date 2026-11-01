@@ -66,6 +66,8 @@ const float MAX_PITCH = 1.48f;			// rad, just short of straight up
 const int RUN_KEY = VK_SHIFT;
 const int CROUCH_KEY = VK_CONTROL;
 const int JUMP_KEY = VK_SPACE;
+const int INTERACT_SCAN_KEY = 'E';
+const float INTERACT_SCAN_DISTANCE = 4.5f;
 
 // Diagnostics, when enabled in the ini file: reports the solid object straight ahead.
 const int PROBE_KEY = 'P';
@@ -185,6 +187,7 @@ struct walk_state_t
 	bool                jump_key_was_down;
 	bool                probe_key_was_down;
 	bool                sign_key_was_down;
+	bool                interact_key_was_down;
 
 	// Reminder of keys currently on screen, empty if none.
 	char                hint[128];
@@ -625,6 +628,7 @@ void stop_walk(const bool game_closing)
 
 void probe(void);
 void go_to_sign(void);
+void inspect_interaction_target(void);
 
 /**
  * @brief Keeps the reminder of how to get back into the truck on screen and up to date.
@@ -639,7 +643,7 @@ void update_hint(const bool visible)
 		door_position(door);
 		const double distance = distance_to(door[0], door[2]);
 		if (distance <= ENTER_DISTANCE) {
-			snprintf(hint, sizeof(hint), "[F9] Get in");
+			snprintf(hint, sizeof(hint), "[F9] Get in\n[E] Inspect object ahead");
 		}
 		else {
 			// A press does nothing this far from the door, so that line is faded.
@@ -718,6 +722,12 @@ void update_walk(void)
 			go_to_sign();
 		}
 		walk.sign_key_was_down = sign_key_down;
+
+		const bool interact_scan_down = input::key_down(INTERACT_SCAN_KEY);
+		if (interact_scan_down && ! walk.interact_key_was_down) {
+			inspect_interaction_target();
+		}
+		walk.interact_key_was_down = interact_scan_down;
 
 		const double start_x = walk.position[0];
 		const double start_z = walk.position[2];
@@ -836,6 +846,37 @@ void probe(void)
 
 	game::scenery_census_t census;
 	count_signs(census);
+}
+
+
+/**
+ * @brief Inspects the nearest collision object in front of the player.
+ *
+ * This is the first step toward contextual interactions: it lets us collect the
+ * actual object descriptions exposed by the game's collision world before
+ * attempting to trigger fueling, cargo or trailer actions.
+ */
+void inspect_interaction_target(void)
+{
+	if (! physics_supported) {
+		overlay::show("Object inspection is unavailable on this game build.");
+		return;
+	}
+	const float cos_pitch = cosf(walk.pitch);
+	const float direction[3] = { -sinf(walk.yaw) * cos_pitch, sinf(walk.pitch), -cosf(walk.yaw) * cos_pitch };
+	char description[256] = "No collision object detected.";
+	void *actor = NULL;
+	const bool found = game::physics_describe(
+		walk.position[0], walk.position[1] + walk.eye_height, walk.position[2],
+		direction, INTERACT_SCAN_DISTANCE, description, sizeof(description), actor
+	);
+	if (! found) {
+		snprintf(description, sizeof(description), "No solid object within %.1f m.", INTERACT_SCAN_DISTANCE);
+	}
+	log_message(SCS_LOG_TYPE_message, "interaction scan: %s (actor %p)", description, actor);
+	char message[320];
+	snprintf(message, sizeof(message), "Object ahead: %s", description);
+	overlay::show(message);
 }
 
 /**
