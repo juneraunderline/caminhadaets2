@@ -13,6 +13,8 @@ const wchar_t *const WINDOW_CLASS = L"takeawalk_overlay";
 
 const UINT MESSAGE_SHOW = WM_APP + 1;
 const UINT MESSAGE_HIDE = WM_APP + 2;
+const UINT MESSAGE_HANDS_SHOW = WM_APP + 3;
+const UINT MESSAGE_HANDS_HIDE = WM_APP + 4;
 const UINT_PTR HIDE_TIMER = 1;
 
 const UINT DISPLAY_TIME_MS = 4000;
@@ -52,6 +54,8 @@ HANDLE ready = NULL;
 DWORD  thread_id = 0;
 HWND   window = NULL;
 HWND   hint_window = NULL;
+HWND   hands_window = NULL;
+HWND   hands_anchor = NULL;
 HFONT  font = NULL;
 HFONT  hint_font = NULL;
 
@@ -300,6 +304,94 @@ void present_hint(const wchar_t *const text, const HWND anchor)
 	ReleaseDC(NULL, screen);
 }
 
+
+/**
+ * @brief Draws a simple first-person pair of forearms and open hands.
+ *
+ * This is a 2D overlay, not a rigged in-world character model. It provides a
+ * visible body reference while the player walks; later interaction poses can
+ * replace this drawing without changing the walking/camera code.
+ */
+void paint_hands(const HWND target)
+{
+	PAINTSTRUCT paint;
+	HDC dc = BeginPaint(target, &paint);
+	RECT area;
+	GetClientRect(target, &area);
+	const HBRUSH transparent = CreateSolidBrush(RGB(255, 0, 255));
+	FillRect(dc, &area, transparent);
+	DeleteObject(transparent);
+
+	const COLORREF sleeve_color = RGB(42, 48, 58);
+	const COLORREF cuff_color = RGB(28, 32, 40);
+	const COLORREF skin_color = RGB(205, 151, 116);
+	const COLORREF skin_light = RGB(231, 184, 148);
+	const HPEN outline = CreatePen(PS_SOLID, 2, RGB(85, 61, 49));
+	const HBRUSH sleeve = CreateSolidBrush(sleeve_color);
+	const HBRUSH cuff = CreateSolidBrush(cuff_color);
+	const HBRUSH skin = CreateSolidBrush(skin_color);
+	const HBRUSH light_skin = CreateSolidBrush(skin_light);
+	const HGDIOBJ old_pen = SelectObject(dc, outline);
+
+	POINT left_sleeve[] = {{0,220},{0,154},{58,118},{151,174},{205,220}};
+	SelectObject(dc, sleeve);
+	Polygon(dc, left_sleeve, sizeof(left_sleeve)/sizeof(left_sleeve[0]));
+	POINT right_sleeve[] = {{480,220},{480,154},{422,118},{329,174},{275,220}};
+	Polygon(dc, right_sleeve, sizeof(right_sleeve)/sizeof(right_sleeve[0]));
+
+	POINT left_cuff[] = {{112,150},{143,139},{177,174},{153,196}};
+	SelectObject(dc, cuff);
+	Polygon(dc, left_cuff, sizeof(left_cuff)/sizeof(left_cuff[0]));
+	POINT right_cuff[] = {{368,150},{337,139},{303,174},{327,196}};
+	Polygon(dc, right_cuff, sizeof(right_cuff)/sizeof(right_cuff[0]));
+
+	SelectObject(dc, skin);
+	POINT left_arm[] = {{143,151},{166,139},{213,166},{235,196},{216,216},{184,193}};
+	Polygon(dc, left_arm, sizeof(left_arm)/sizeof(left_arm[0]));
+	POINT right_arm[] = {{337,151},{314,139},{267,166},{245,196},{264,216},{296,193}};
+	Polygon(dc, right_arm, sizeof(right_arm)/sizeof(right_arm[0]));
+
+	SelectObject(dc, light_skin);
+	Ellipse(dc, 190, 160, 239, 207);
+	Ellipse(dc, 241, 160, 290, 207);
+	// Four fingers on each relaxed hand.
+	for (int i = 0; i < 4; ++i) {
+		const int y = 174 + i * 7;
+		MoveToEx(dc, 198, y, NULL); LineTo(dc, 216, y + 5);
+		MoveToEx(dc, 282, y, NULL); LineTo(dc, 264, y + 5);
+	}
+	MoveToEx(dc, 205, 190, NULL); LineTo(dc, 225, 201);
+	MoveToEx(dc, 275, 190, NULL); LineTo(dc, 255, 201);
+
+	SelectObject(dc, old_pen);
+	DeleteObject(outline);
+	DeleteObject(sleeve);
+	DeleteObject(cuff);
+	DeleteObject(skin);
+	DeleteObject(light_skin);
+	EndPaint(target, &paint);
+}
+
+void position_hands(const HWND anchor)
+{
+	if (! anchor || ! IsWindow(anchor) || ! hands_window) {
+		return;
+	}
+	RECT rect;
+	if (! GetClientRect(anchor, &rect)) {
+		return;
+	}
+	POINT origin = {0, 0};
+	ClientToScreen(anchor, &origin);
+	const int width = 480;
+	const int height = 220;
+	const int x = origin.x + (rect.right - width) / 2;
+	const int y = origin.y + rect.bottom - height + 12;
+	SetWindowPos(hands_window, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+	InvalidateRect(hands_window, NULL, TRUE);
+}
+
+
 LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPARAM lparam)
 {
 	switch (message) {
@@ -323,6 +415,23 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 			}
 			return 0;
 		}
+		case MESSAGE_HANDS_SHOW:
+			EnterCriticalSection(&lock);
+			{
+				HWND anchor = hands_anchor;
+				LeaveCriticalSection(&lock);
+				position_hands(anchor);
+			}
+			return 0;
+		case MESSAGE_HANDS_HIDE:
+			ShowWindow(hands_window, SW_HIDE);
+			return 0;
+		case WM_PAINT:
+			if (handle == hands_window) {
+				paint_hands(handle);
+				return 0;
+			}
+			break;
 		case MESSAGE_HIDE:
 		case WM_TIMER: {
 			KillTimer(handle, HIDE_TIMER);
@@ -351,11 +460,15 @@ DWORD WINAPI thread_main(LPVOID)
 	hint_font = CreateFontW(-HINT_FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	SetEvent(ready);
 
-	if (window && hint_window) {
+	if (window && hint_window && hands_window) {
 		MSG message;
 		while (GetMessageW(&message, NULL, 0, 0) > 0) {
 			DispatchMessageW(&message);
 		}
+	}
+	if (hands_window) {
+		DestroyWindow(hands_window);
+		hands_window = NULL;
 	}
 	if (hint_window) {
 		DestroyWindow(hint_window);
@@ -388,7 +501,7 @@ bool init(void)
 		return false;
 	}
 	WaitForSingleObject(ready, 2000);
-	return (window != NULL) && (hint_window != NULL);
+	return (window != NULL) && (hint_window != NULL) && (hands_window != NULL);
 }
 
 void shutdown(void)
@@ -427,6 +540,19 @@ void hide(void)
 	if (window) {
 		PostMessageW(window, MESSAGE_HIDE, 0, 0);
 	}
+}
+
+void set_hands(const bool visible)
+{
+	if (! hands_window) { return; }
+	if (! visible) {
+		PostMessageW(hands_window, MESSAGE_HANDS_HIDE, 0, 0);
+		return;
+	}
+	EnterCriticalSection(&lock);
+	hands_anchor = GetForegroundWindow();
+	LeaveCriticalSection(&lock);
+	PostMessageW(hands_window, MESSAGE_HANDS_SHOW, 0, 0);
 }
 
 void set_hint(const char *const text)
