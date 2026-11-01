@@ -1,6 +1,6 @@
 Take a Walk for Euro Truck Simulator 2
 Get out of your truck and walk around on foot.
-https://github.com/adamvirtualspace-lab/takeawalk
+https://github.com/juneraunderline/caminhadaets2
 
 For ETS2 1.61.1.1, Windows, 64-bit. Single player only.
 
@@ -29,8 +29,11 @@ Park, set the parking brake, then:
   W A S D    walk          Shift   run
   Ctrl       crouch        Space   jump
   Mouse      look around
+  E          inspect the solid object directly ahead (4.5 m)
 
-The panel in the bottom left corner reminds you how to get back in.
+The panel in the bottom left corner reminds you how to get back in and inspect objects.
+The current hands are a 2D screen overlay prototype, not an animated 3D body. The E key
+only reports the collision object ahead; it does not yet activate fueling, cargo or trailer actions.
 Settings are in takeawalk.ini next to takeawalk.dll; each one is explained there.
 
 
