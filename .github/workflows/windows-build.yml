@@ -1,0 +1,36 @@
+name: Windows x64 build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build plugin (MSVC x64)
+        shell: pwsh
+        run: ./plugin/build.ps1
+
+      - name: Package release ZIP
+        shell: pwsh
+        run: ./plugin/package.ps1 -SkipBuild
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: takeawalk-windows-x64
+          path: |
+            plugin/build/takeawalk.dll
+            plugin/build/takeawalk-*.zip
+          if-no-files-found: error
+          retention-days: 30
