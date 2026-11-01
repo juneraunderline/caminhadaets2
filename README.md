@@ -9,6 +9,10 @@ press F9 again to get in.
 
 **Status:** version 0.18. The source is configured for the 1.61.1.1 game build. First-person walking is implemented; third person is planned. The DLL has not been validated against other ETS2 builds.
 
+## First-person hands prototype (0.19-dev)
+
+The development branch adds a **2D first-person forearm/hand overlay** while walking. It is a visual prototype drawn over the game window; it is not yet a rigged 3D player model and does not animate fingers or perform world interactions. Fueling, cargo pickup, and trailer/cable operations are not implemented by this prototype.
+
 ## What you need
 
 - Euro Truck Simulator 2 **1.61.1.1**, Windows, 64-bit. Tested with DirectX 11. Other patch builds, including 1.61.1.9, must be treated as unverified until tested in-game.
