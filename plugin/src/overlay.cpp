@@ -456,6 +456,8 @@ DWORD WINAPI thread_main(LPVOID)
 	const DWORD style = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
 	window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
 	hint_window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
+	hands_window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
+	if (hands_window) { SetLayeredWindowAttributes(hands_window, RGB(255, 0, 255), 0, LWA_COLORKEY); }
 	font = CreateFontW(-FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	hint_font = CreateFontW(-HINT_FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	SetEvent(ready);
