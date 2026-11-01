@@ -31,7 +31,7 @@
 #include "physics_trace.h"
 #include "sound.h"
 
-#define TAKEAWALK_VERSION "0.18"
+#define TAKEAWALK_VERSION "0.19-dev"
 
 namespace {
 
@@ -596,6 +596,7 @@ void start_walk(void)
 	QueryPerformanceCounter(&walk.last_update);
 	walk.active = true;
 	walk.time_without_camera = 0.0f;
+	overlay::set_hands(true);
 	game::camera_set(walk.placement);
 
 	game::driver_set_hidden(config.hide_driver);
@@ -609,6 +610,7 @@ void stop_walk(const bool game_closing)
 		return;
 	}
 	walk.active = false;
+	overlay::set_hands(false);
 	input::capture_stop();
 	game::camera_release();
 	game::traffic_clear_walker();
