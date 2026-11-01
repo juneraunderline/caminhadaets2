@@ -24,6 +24,9 @@ void show(const char *text);
  */
 void hide(void);
 
+/** Shows or hides the first-person forearm/hand overlay while walking. */
+void set_hands(bool visible);
+
 /**
  * @brief Shows a reminder of keys in the bottom left corner until it is changed or taken away.
  *
