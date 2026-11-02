@@ -264,8 +264,6 @@ uint8_t *load_mp3_wave(const wchar_t *const relative_path, size_t &wave_size)
 	if (SUCCEEDED(hr)) hr = MFCreateMediaType(&type);
 	if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
 	if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
-	if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 2);
-	if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, 44100);
 	if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
 	if (SUCCEEDED(hr)) hr = reader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, NULL, type);
 	if (SUCCEEDED(hr)) { type->Release(); type = NULL; hr = reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &type); }
@@ -306,7 +304,7 @@ uint8_t *load_mp3_wave(const wchar_t *const relative_path, size_t &wave_size)
 		log_message(SCS_LOG_TYPE_warning, "could not decode door sound MP3 (0x%08lX)", hr);
 		return NULL;
 	}
-	const float gain = 0.55f;
+	const float gain = 1.0f;
 	uint8_t *wave = make_wave(&pcm[0], pcm.size(), static_cast<int>(channels), static_cast<int>(rate), gain);
 	if (wave) wave_size = sizeof(wave_header_t) + pcm.size() * sizeof(short);
 	return wave;
