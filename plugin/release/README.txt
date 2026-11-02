@@ -31,8 +31,7 @@ Park, set the parking brake, then:
   Mouse      look around
   E          inspect the solid object directly ahead (4.5 m)
 
-The prompt appears near the bottom centre only when you look toward the driver's door:
-  [F9] Sair do caminhão (in the cab) / [F9] Entrar no caminhão (on foot).
+A compact TM Real Walk-style prompt appears near the bottom centre only when you look toward the driver's door. It uses a dark rounded card, a cyan circular icon, white text and a thin cyan underline; F9 is shown beside the action.
 The 2D hand drawing and persistent key panel have been removed. The route-advisor HUD
 is hidden while walking and restored when you return to the cab.
 The E key only reports the collision object ahead; it does not yet activate fueling,
