@@ -233,4 +233,71 @@ void camera_release(void)
 	}
 }
 
+void camera_buckle_animation(void)
+{
+	placement_t original = {};
+	if (! camera_take(original)) {
+		return;
+	}
+
+	// Small, restrained head movement: glance down and slightly toward the belt,
+	// then return to the exact camera placement. This is a camera-only illusion;
+	// it does not animate the driver's arms or belt model.
+	const float pitch = 0.075f;
+	const float yaw = 0.045f;
+	const float half_pitch = pitch * 0.5f;
+	const float half_yaw = yaw * 0.5f;
+	const float cp = cosf(half_pitch);
+	const float sp = sinf(half_pitch);
+	const float cy = cosf(half_yaw);
+	const float sy = sinf(half_yaw);
+
+	for (int frame = 0; frame <= 8; ++frame) {
+		const float t = static_cast<float>(frame) / 8.0f;
+		const float eased = t * t * (3.0f - 2.0f * t);
+		placement_t pose = original;
+		pose.position[1] -= 0.055f * eased;
+		pose.position[0] += 0.035f * eased;
+		// Apply a subtle local pitch/yaw quaternion offset.
+		const float dw = cp * cy;
+		const float dx = sp * cy;
+		const float dy = cp * sy;
+		const float dz = -sp * sy;
+		const float qw = original.rotation[0], qx = original.rotation[1];
+		const float qy = original.rotation[2], qz = original.rotation[3];
+		const float scale = eased;
+		const float rw = 1.0f + (dw - 1.0f) * scale;
+		const float rx = dx * scale, ry = dy * scale, rz = dz * scale;
+		pose.rotation[0] = qw * rw - qx * rx - qy * ry - qz * rz;
+		pose.rotation[1] = qw * rx + qx * rw + qy * rz - qz * ry;
+		pose.rotation[2] = qw * ry - qx * rz + qy * rw + qz * rx;
+		pose.rotation[3] = qw * rz + qx * ry - qy * rx + qz * rw;
+		camera_set(pose);
+		Sleep(16);
+	}
+	for (int frame = 8; frame >= 0; --frame) {
+		const float t = static_cast<float>(frame) / 8.0f;
+		const float eased = t * t * (3.0f - 2.0f * t);
+		placement_t pose = original;
+		pose.position[1] -= 0.055f * eased;
+		pose.position[0] += 0.035f * eased;
+		const float dw = cp * cy;
+		const float dx = sp * cy;
+		const float dy = cp * sy;
+		const float dz = -sp * sy;
+		const float qw = original.rotation[0], qx = original.rotation[1];
+		const float qy = original.rotation[2], qz = original.rotation[3];
+		const float rw = 1.0f + (dw - 1.0f) * eased;
+		const float rx = dx * eased, ry = dy * eased, rz = dz * eased;
+		pose.rotation[0] = qw * rw - qx * rx - qy * ry - qz * rz;
+		pose.rotation[1] = qw * rx + qx * rw + qy * rz - qz * ry;
+		pose.rotation[2] = qw * ry - qx * rz + qy * rw + qz * rx;
+		pose.rotation[3] = qw * rz + qx * ry - qy * rx + qz * rw;
+		camera_set(pose);
+		Sleep(16);
+	}
+	camera_set(original);
+	camera_release();
+}
+
 } // namespace game
