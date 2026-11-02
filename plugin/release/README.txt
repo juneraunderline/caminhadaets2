@@ -31,9 +31,12 @@ Park, set the parking brake, then:
   Mouse      look around
   E          inspect the solid object directly ahead (4.5 m)
 
-The panel in the bottom left corner reminds you how to get back in and inspect objects.
-The current hands are a 2D screen overlay prototype, not an animated 3D body. The E key
-only reports the collision object ahead; it does not yet activate fueling, cargo or trailer actions.
+The prompt appears near the bottom centre only when you look toward the driver's door:
+  [F9] Sair do caminhão (in the cab) / [F9] Entrar no caminhão (on foot).
+The 2D hand drawing and persistent key panel have been removed. The route-advisor HUD
+is hidden while walking and restored when you return to the cab.
+The E key only reports the collision object ahead; it does not yet activate fueling,
+cargo or trailer actions.
 Settings are in takeawalk.ini next to takeawalk.dll; each one is explained there.
 
 
@@ -50,8 +53,7 @@ GOOD TO KNOW
   release.
 - If something does not work, the game's log says why: search
   Documents\Euro Truck Simulator 2\game.log.txt for "takeawalk".
-- It changes nothing in your save. While you are on foot it hides the speedometer
-  and switches the game's developer mode on (the walking camera needs it), and puts
-  both back when you get in.
+- It changes nothing in your save. While you are on foot it hides the route-advisor HUD and speedometer and switches the game's developer mode
+  on (the walking camera needs it), then restores the previous settings when you get in.
 
 The README on GitHub has the full details.
