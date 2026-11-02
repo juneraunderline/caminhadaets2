@@ -572,8 +572,8 @@ void start_walk(void)
 		return;
 	}
 
-	// Cover the camera switch with a short, non-blocking fade.
-	overlay::fade_transition();
+	// Fade fully to black before moving the camera, then reveal the new view.
+	overlay::fade_out();
 
 	// Step out beside the driver's door, facing the way the truck faces.
 
@@ -611,6 +611,7 @@ void start_walk(void)
 	// Keep the experimental 2D hand overlay disabled until camera placement is stable.
 	overlay::set_hands(false);
 	game::camera_set(walk.placement);
+	overlay::fade_in();
 	sound::truck_exited();
 
 	game::driver_set_hidden(config.hide_driver);
@@ -623,10 +624,11 @@ void stop_walk(const bool game_closing)
 		return;
 	}
 	walk.active = false;
-	overlay::fade_transition();
+	overlay::fade_out();
 	overlay::set_hands(false);
 	input::capture_stop();
 	game::camera_release();
+	overlay::fade_in();
 	game::traffic_clear_walker();
 	game::scenery_clear_walker();
 	game::driver_set_hidden(false);
