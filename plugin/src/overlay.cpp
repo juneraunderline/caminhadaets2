@@ -312,6 +312,14 @@ void save_sound_settings(void)
 
 LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPARAM lparam)
 {
+	// WM_NCCREATE arrives before WM_CREATE; identify the settings window early
+	// so its child controls are created by the settings-specific branch below.
+	if (message == WM_NCCREATE) {
+		const CREATESTRUCTW *creation = reinterpret_cast<const CREATESTRUCTW *>(lparam);
+		if (creation && creation->lpszName && (wcscmp(creation->lpszName, L"Take a Walk - Configurações") == 0)) {
+			settings_window = handle;
+		}
+	}
 	if (handle == settings_window) {
 		switch (message) {
 			case WM_CREATE: {
