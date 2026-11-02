@@ -25,7 +25,6 @@ const DWORD FADE_OUT_MS = 1200;
 const DWORD FADE_IN_MS = 1500;
 const DWORD FADE_HOLD_MS = 350;
 const BYTE FADE_MAX_ALPHA = 255;
-const UINT_PTR FADE_HOLD_TIMER = 3;
 HANDLE fade_black = NULL;
 int fade_stage = 0;
 
@@ -426,13 +425,6 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 			return 0;
 		}
 		case WM_TIMER: {
-			if (wparam == FADE_HOLD_TIMER) {
-				KillTimer(handle, FADE_HOLD_TIMER);
-				fade_stage = 2;
-				fade_started = GetTickCount64();
-				SetTimer(handle, FADE_TIMER, 16, NULL);
-				return 0;
-			}
 			if (wparam == FADE_TIMER) {
 				const ULONGLONG elapsed = GetTickCount64() - fade_started;
 				if (fade_stage == 1) {
@@ -442,7 +434,6 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 					if (phase >= 1.0f) {
 						KillTimer(handle, FADE_TIMER);
 						if (fade_black) SetEvent(fade_black);
-						SetTimer(handle, FADE_HOLD_TIMER, FADE_HOLD_MS, NULL);
 					}
 				}
 				else if (fade_stage == 2) {
