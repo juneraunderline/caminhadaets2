@@ -5,6 +5,7 @@
 #include <wchar.h>
 
 #include "overlay.h"
+#include "config.h"
 
 namespace overlay {
 namespace {
@@ -16,6 +17,9 @@ const UINT MESSAGE_HIDE = WM_APP + 2;
 const UINT_PTR HIDE_TIMER = 1;
 const UINT_PTR FADE_TIMER = 2;
 const UINT MESSAGE_FADE = WM_APP + 3;
+const UINT MESSAGE_SETTINGS = WM_APP + 4;
+const int ID_DOOR_SOUND = 4101;
+const int ID_BELT_SOUND = 4102;
 const DWORD FADE_DURATION_MS = 900;
 const BYTE FADE_MAX_ALPHA = 185;
 
@@ -52,6 +56,8 @@ DWORD  thread_id = 0;
 HWND   window = NULL;
 HWND   hint_window = NULL;
 HWND   fade_window = NULL;
+HWND   settings_window = NULL;
+HBRUSH settings_brush = NULL;
 ULONGLONG fade_started = 0;
 HFONT  font = NULL;
 HFONT  hint_font = NULL;
@@ -296,8 +302,57 @@ void present_hint(const wchar_t *const text, const HWND anchor)
 	ReleaseDC(NULL, screen);
 }
 
+void save_sound_settings(void)
+{
+	wchar_t path[MAX_PATH];
+	if (!config_file_path(L"takeawalk.ini", path, MAX_PATH)) return;
+	WritePrivateProfileStringW(L"sound", L"door_sounds", config.door_sounds ? L"1" : L"0", path);
+	WritePrivateProfileStringW(L"sound", L"seatbelt_sound", config.seatbelt_sound ? L"1" : L"0", path);
+}
+
 LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPARAM lparam)
 {
+	if (handle == settings_window) {
+		switch (message) {
+			case WM_CREATE: {
+				CreateWindowExW(0, L"STATIC", L"TAKE A WALK  |  CONFIGURAÇÕES", WS_CHILD | WS_VISIBLE,
+					22, 18, 360, 30, handle, NULL, GetModuleHandleW(NULL), NULL);
+				HWND door = CreateWindowExW(0, L"BUTTON", L"Sons de abrir/fechar a porta",
+					WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 26, 72, 330, 28, handle,
+					reinterpret_cast<HMENU>(ID_DOOR_SOUND), GetModuleHandleW(NULL), NULL);
+				HWND belt = CreateWindowExW(0, L"BUTTON", L"Som do cinto ao entrar na cabine",
+					WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 26, 112, 330, 28, handle,
+					reinterpret_cast<HMENU>(ID_BELT_SOUND), GetModuleHandleW(NULL), NULL);
+				SendMessageW(door, BM_SETCHECK, config.door_sounds ? BST_CHECKED : BST_UNCHECKED, 0);
+				SendMessageW(belt, BM_SETCHECK, config.seatbelt_sound ? BST_CHECKED : BST_UNCHECKED, 0);
+				CreateWindowExW(0, L"BUTTON", L"Fechar", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+					286, 166, 90, 30, handle, reinterpret_cast<HMENU>(IDOK), GetModuleHandleW(NULL), NULL);
+				return 0;
+			}
+			case WM_COMMAND:
+				if (LOWORD(wparam) == ID_DOOR_SOUND) {
+					config.door_sounds = (SendMessageW(reinterpret_cast<HWND>(lparam), BM_GETCHECK, 0, 0) == BST_CHECKED);
+					save_sound_settings();
+					return 0;
+				}
+				if (LOWORD(wparam) == ID_BELT_SOUND) {
+					config.seatbelt_sound = (SendMessageW(reinterpret_cast<HWND>(lparam), BM_GETCHECK, 0, 0) == BST_CHECKED);
+					save_sound_settings();
+					return 0;
+				}
+				if (LOWORD(wparam) == IDOK) { ShowWindow(handle, SW_HIDE); return 0; }
+				break;
+			case WM_CTLCOLORDLG:
+			case WM_CTLCOLORSTATIC:
+			case WM_CTLCOLORBTN:
+				SetTextColor(reinterpret_cast<HDC>(wparam), RGB(240, 243, 247));
+				SetBkColor(reinterpret_cast<HDC>(wparam), RGB(25, 29, 36));
+				return reinterpret_cast<LRESULT>(settings_brush);
+			case WM_CLOSE:
+				ShowWindow(handle, SW_HIDE);
+				return 0;
+		}
+	}
 	switch (message) {
 		case MESSAGE_SHOW: {
 			const bool hint = (handle == hint_window);
@@ -322,6 +377,14 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 		case MESSAGE_HIDE: {
 			KillTimer(handle, HIDE_TIMER);
 			ShowWindow(handle, SW_HIDE);
+			return 0;
+		}
+		case MESSAGE_SETTINGS: {
+			if (settings_window) {
+				const bool visible = IsWindowVisible(settings_window) != FALSE;
+				ShowWindow(settings_window, visible ? SW_HIDE : SW_SHOW);
+				if (!visible) { SetForegroundWindow(settings_window); }
+			}
 			return 0;
 		}
 		case MESSAGE_FADE: {
@@ -377,6 +440,18 @@ DWORD WINAPI thread_main(LPVOID)
 	window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
 	hint_window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
 	fade_window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
+	settings_brush = CreateSolidBrush(RGB(25, 29, 36));
+	settings_window = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, WINDOW_CLASS,
+		L"Take a Walk - Configurações", WS_POPUP | WS_CAPTION | WS_SYSMENU,
+		0, 0, 420, 240, NULL, NULL, window_class.hInstance, NULL);
+	if (settings_window) {
+		RECT work = {};
+		SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+		SetWindowPos(settings_window, HWND_TOPMOST,
+			work.left + ((work.right - work.left) - 420) / 2,
+			work.top + ((work.bottom - work.top) - 240) / 2,
+			420, 240, SWP_NOACTIVATE);
+	}
 	font = CreateFontW(-FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	hint_font = CreateFontW(-HINT_FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	SetEvent(ready);
@@ -387,6 +462,7 @@ DWORD WINAPI thread_main(LPVOID)
 			DispatchMessageW(&message);
 		}
 	}
+	if (settings_window) { DestroyWindow(settings_window); settings_window = NULL; }
 	if (fade_window) {
 		DestroyWindow(fade_window);
 		fade_window = NULL;
@@ -407,6 +483,7 @@ DWORD WINAPI thread_main(LPVOID)
 		DeleteObject(hint_font);
 		hint_font = NULL;
 	}
+	if (settings_brush) { DeleteObject(settings_brush); settings_brush = NULL; }
 	UnregisterClassW(WINDOW_CLASS, window_class.hInstance);
 	return 0;
 }
@@ -469,6 +546,11 @@ void fade_transition(void)
 	if (fade_window) {
 		PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
 	}
+}
+
+void toggle_settings(void)
+{
+	if (settings_window) PostMessageW(settings_window, MESSAGE_SETTINGS, 0, 0);
 }
 
 void set_hands(const bool)
