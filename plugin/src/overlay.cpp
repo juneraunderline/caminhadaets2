@@ -5,6 +5,7 @@
 #include <wchar.h>
 
 #include "overlay.h"
+#include "dx11_fade.h"
 #include "config.h"
 
 namespace overlay {
@@ -534,6 +535,7 @@ DWORD WINAPI thread_main(LPVOID)
 
 bool init(void)
 {
+	dx11_fade::init();
 	InitializeCriticalSection(&lock);
 	ready = CreateEventW(NULL, TRUE, FALSE, NULL);
 	fade_black = CreateEventW(NULL, TRUE, FALSE, NULL);
@@ -547,6 +549,7 @@ bool init(void)
 
 void shutdown(void)
 {
+	dx11_fade::shutdown();
 	if (thread) {
 		PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
 		WaitForSingleObject(thread, 2000);
@@ -584,26 +587,22 @@ void hide(void)
 	}
 }
 
-/** Start fading to black asynchronously; never stall the game's render thread. */
+/** Fade the actual DirectX 11 back buffer; do not use a separate desktop window. */
 void fade_out(void)
 {
-	if (!fade_window) return;
-	if (fade_black) ResetEvent(fade_black);
-	PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
+	dx11_fade::fade_out();
 }
 
-/** True only after the overlay thread has completed the fade to opaque black. */
+/** True after the DirectX 11 frame has reached opaque black. */
 bool fade_is_black(void)
 {
-	return fade_black && (WaitForSingleObject(fade_black, 0) == WAIT_OBJECT_0);
+	return dx11_fade::is_black();
 }
 
-/** Fade back from black after the camera has changed. */
+/** Reveal the game image after the camera has changed. */
 void fade_in(void)
 {
-	if (fade_window) {
-		PostMessageW(fade_window, MESSAGE_FADE_IN, 0, 0);
-	}
+	dx11_fade::fade_in();
 }
 
 void toggle_settings(void)
