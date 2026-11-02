@@ -213,6 +213,11 @@ ULONGLONG         toggle_pressed_at = 0;
 bool              hud_recovered = false;
 bool              startup_buckle_played = false;
 
+enum transition_t { transition_none, transition_entering, transition_exiting };
+transition_t      camera_transition = transition_none;
+bool              transition_game_closing = false;
+game::placement_t cab_reference;
+
 bool can_leave_truck(void)
 {
 	return (fabsf(telemetry.speed) < STOPPED_SPEED) && telemetry.parking_brake;
@@ -561,25 +566,11 @@ void keep_clear_of_walls(void)
 	}
 }
 
-void start_walk(void)
+void finish_start_walk(void)
 {
-	// The settings come first: the game only gives the camera in developer mode.
-
-	hud::hide();
-	game::placement_t reference;
-	if (! game::camera_take(reference)) {
-		hud::restore(false);
-		return;
-	}
-
-	// Fade fully to black before moving the camera, then reveal the new view.
-	overlay::fade_out();
-
-	// Step out beside the driver's door, facing the way the truck faces.
-
+	// Called on a telemetry frame only after the fade has reached full black.
 	const float truck_yaw = telemetry.truck_placement.orientation.heading * TWO_PI;
 	door_position(walk.position);
-
 	walk.vertical_speed = 0.0f;
 	walk.airborne = false;
 	walk.ground_found = true;
@@ -591,44 +582,33 @@ void start_walk(void)
 	walk.jump_key_was_down = false;
 	walk.probe_key_was_down = false;
 	walk.sign_key_was_down = false;
-	// Ask the game to load map collision around the exit point before locating
-	// the physics coordinate origin. On ETS2 1.61.1.9 the truck actor was missing
-	// from raycasts at startup even though static ground was already present.
 	activate_surroundings();
 	locate_physics();
 	activate_surroundings();
 	follow_ground(0.0f);
-
-	walk.placement = reference;
+	walk.placement = cab_reference;
 	walk.yaw = truck_yaw;
 	walk.pitch = 0.0f;
 	update_placement();
-
 	input::capture_start();
 	QueryPerformanceCounter(&walk.last_update);
 	walk.active = true;
 	walk.time_without_camera = 0.0f;
-	// Keep the experimental 2D hand overlay disabled until camera placement is stable.
 	overlay::set_hands(false);
 	game::camera_set(walk.placement);
-	overlay::fade_in();
 	sound::truck_exited();
-
 	game::driver_set_hidden(config.hide_driver);
 	log_message(SCS_LOG_TYPE_message, "on foot");
+	camera_transition = transition_none;
+	overlay::fade_in();
 }
 
-void stop_walk(const bool game_closing)
+void finish_stop_walk(const bool game_closing)
 {
-	if (! walk.active) {
-		return;
-	}
 	walk.active = false;
-	overlay::fade_out();
 	overlay::set_hands(false);
 	input::capture_stop();
 	game::camera_release();
-	overlay::fade_in();
 	game::traffic_clear_walker();
 	game::scenery_clear_walker();
 	game::driver_set_hidden(false);
@@ -636,12 +616,46 @@ void stop_walk(const bool game_closing)
 	overlay::hide();
 	overlay::set_hint(NULL);
 	walk.hint[0] = 0;
-	if (! game_closing) {
-		// Do not reacquire the free camera here: the game may not have switched
-		// back to the cab camera yet. Reacquiring it can leave the player outside.
-		sound::truck_entered();
-	}
+	if (! game_closing) sound::truck_entered();
 	log_message(SCS_LOG_TYPE_message, "back in the truck");
+	camera_transition = transition_none;
+	if (! game_closing) overlay::fade_in();
+}
+
+void start_walk(void)
+{
+	if (camera_transition != transition_none) return;
+	hud::hide();
+	if (! game::camera_take(cab_reference)) {
+		hud::restore(false);
+		return;
+	}
+	camera_transition = transition_entering;
+	overlay::fade_out();
+}
+
+void stop_walk(const bool game_closing)
+{
+	if (! walk.active || camera_transition == transition_exiting) return;
+	if (game_closing) {
+		camera_transition = transition_none;
+		finish_stop_walk(true);
+		return;
+	}
+	camera_transition = transition_exiting;
+	transition_game_closing = false;
+	overlay::fade_out();
+}
+
+void update_camera_transition(void)
+{
+	if (camera_transition == transition_none || ! overlay::fade_is_black()) return;
+	if (camera_transition == transition_entering) {
+		finish_start_walk();
+	}
+	else if (camera_transition == transition_exiting) {
+		finish_stop_walk(transition_game_closing);
+	}
 }
 
 void probe(void);
@@ -788,6 +802,7 @@ void update_walk(void)
 
 void on_toggle_pressed(void)
 {
+	if (camera_transition != transition_none) return;
 	if (walk.active) {
 		double door[3];
 		door_position(door);
@@ -1030,7 +1045,8 @@ SCSAPI_VOID telemetry_frame_end(const scs_event_t, const void *const, const scs_
 	}
 
 	update_trace();
-	if (walk.active) {
+	update_camera_transition();
+	if (walk.active && camera_transition != transition_exiting) {
 		update_walk();
 	}
 	else {
