@@ -14,6 +14,10 @@ const wchar_t *const WINDOW_CLASS = L"takeawalk_overlay";
 const UINT MESSAGE_SHOW = WM_APP + 1;
 const UINT MESSAGE_HIDE = WM_APP + 2;
 const UINT_PTR HIDE_TIMER = 1;
+const UINT_PTR FADE_TIMER = 2;
+const UINT MESSAGE_FADE = WM_APP + 3;
+const DWORD FADE_DURATION_MS = 420;
+const BYTE FADE_MAX_ALPHA = 185;
 
 const UINT DISPLAY_TIME_MS = 4000;
 
@@ -47,6 +51,8 @@ HANDLE ready = NULL;
 DWORD  thread_id = 0;
 HWND   window = NULL;
 HWND   hint_window = NULL;
+HWND   fade_window = NULL;
+ULONGLONG fade_started = 0;
 HFONT  font = NULL;
 HFONT  hint_font = NULL;
 
@@ -313,8 +319,41 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 			}
 			return 0;
 		}
-		case MESSAGE_HIDE:
+		case MESSAGE_HIDE: {
+			KillTimer(handle, HIDE_TIMER);
+			ShowWindow(handle, SW_HIDE);
+			return 0;
+		}
+		case MESSAGE_FADE: {
+			if (fade_window) {
+				RECT rect = {};
+				HWND anchor = GetForegroundWindow();
+				if (anchor && GetWindowRect(anchor, &rect)) {
+					SetWindowPos(fade_window, HWND_TOPMOST, rect.left, rect.top,
+						rect.right - rect.left, rect.bottom - rect.top,
+						SWP_NOACTIVATE | SWP_SHOWWINDOW);
+					fade_started = GetTickCount64();
+					SetLayeredWindowAttributes(fade_window, RGB(0, 0, 0), 0, LWA_ALPHA);
+					SetTimer(fade_window, FADE_TIMER, 16, NULL);
+				}
+			}
+			return 0;
+		}
 		case WM_TIMER: {
+			if (wparam == FADE_TIMER) {
+				const ULONGLONG elapsed = GetTickCount64() - fade_started;
+				if (elapsed >= FADE_DURATION_MS) {
+					KillTimer(handle, FADE_TIMER);
+					ShowWindow(handle, SW_HIDE);
+				}
+				else {
+					const float phase = static_cast<float>(elapsed) / FADE_DURATION_MS;
+					const float envelope = (phase < 0.5f) ? (phase * 2.0f) : ((1.0f - phase) * 2.0f);
+					const BYTE alpha = static_cast<BYTE>(FADE_MAX_ALPHA * envelope);
+					SetLayeredWindowAttributes(handle, RGB(0, 0, 0), alpha, LWA_ALPHA);
+				}
+				return 0;
+			}
 			KillTimer(handle, HIDE_TIMER);
 			ShowWindow(handle, SW_HIDE);
 			return 0;
@@ -337,15 +376,20 @@ DWORD WINAPI thread_main(LPVOID)
 	const DWORD style = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
 	window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
 	hint_window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
+	fade_window = CreateWindowExW(style, WINDOW_CLASS, L"", WS_POPUP, 0, 0, 0, 0, NULL, NULL, window_class.hInstance, NULL);
 	font = CreateFontW(-FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	hint_font = CreateFontW(-HINT_FONT_HEIGHT, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
 	SetEvent(ready);
 
-	if (window && hint_window) {
+	if (window && hint_window && fade_window) {
 		MSG message;
 		while (GetMessageW(&message, NULL, 0, 0) > 0) {
 			DispatchMessageW(&message);
 		}
+	}
+	if (fade_window) {
+		DestroyWindow(fade_window);
+		fade_window = NULL;
 	}
 	if (hint_window) {
 		DestroyWindow(hint_window);
@@ -378,7 +422,7 @@ bool init(void)
 		return false;
 	}
 	WaitForSingleObject(ready, 2000);
-	return (window != NULL) && (hint_window != NULL);
+	return (window != NULL) && (hint_window != NULL) && (fade_window != NULL);
 }
 
 void shutdown(void)
@@ -416,6 +460,14 @@ void hide(void)
 {
 	if (window) {
 		PostMessageW(window, MESSAGE_HIDE, 0, 0);
+	}
+}
+
+/** Brief black fade around a camera transition, without blocking the telemetry thread. */
+void fade_transition(void)
+{
+	if (fade_window) {
+		PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
 	}
 }
 
