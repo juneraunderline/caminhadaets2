@@ -26,6 +26,8 @@ void **swapchain_vtable = NULL;
 std::atomic<float> alpha(0.0f);
 std::atomic<int> transition(0); // 0 idle, 1 fading out, 2 fading in
 std::atomic<bool> installed(false);
+std::atomic<ULONGLONG> transition_started(0);
+std::atomic<float> transition_initial_alpha(0.0f);
 std::mutex resource_lock;
 
 ID3D11Device *device = NULL;
@@ -241,8 +243,23 @@ void draw_fade(IDXGISwapChain *chain)
     release_if(old_layout); release_if(old_vs); release_if(old_ps); release_if(old_gs); release_if(old_ps_cb);
 }
 
+void advance_transition(void)
+{
+    const int mode = transition.load(std::memory_order_relaxed);
+    if (mode == 0) return;
+    const ULONGLONG started = transition_started.load(std::memory_order_relaxed);
+    const ULONGLONG elapsed = GetTickCount64() - started;
+    const float duration = (mode == 1) ? 1200.0f : 1500.0f;
+    const float t = (elapsed >= static_cast<ULONGLONG>(duration)) ? 1.0f : static_cast<float>(elapsed) / duration;
+    const float eased = t * t * (3.0f - 2.0f * t);
+    const float initial = transition_initial_alpha.load(std::memory_order_relaxed);
+    alpha.store((mode == 1) ? (initial + (1.0f - initial) * eased) : (initial * (1.0f - eased)), std::memory_order_relaxed);
+    if (t >= 1.0f) transition.store(0, std::memory_order_relaxed);
+}
+
 HRESULT STDMETHODCALLTYPE hooked_present(IDXGISwapChain *chain, UINT sync, UINT flags)
 {
+    advance_transition();
     draw_fade(chain);
     return original_present ? original_present(chain, sync, flags) : S_OK;
 }
@@ -365,12 +382,15 @@ void shutdown(void)
 
 void fade_out(void)
 {
-    alpha.store(0.0f);
+    transition_initial_alpha.store(alpha.load());
+    transition_started.store(GetTickCount64());
     transition.store(1);
 }
 
 void fade_in(void)
 {
+    transition_initial_alpha.store(alpha.load());
+    transition_started.store(GetTickCount64());
     transition.store(2);
 }
 
