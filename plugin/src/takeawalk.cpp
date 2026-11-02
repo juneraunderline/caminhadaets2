@@ -203,6 +203,7 @@ bool              camera_supported = false;
 bool              physics_supported = false;
 bool              game_paused = true;
 bool              toggle_key_was_down = false;
+bool              settings_key_was_down = false;
 
 // Set while the toggle key is held after a refused attempt to get in.
 bool              force_return_armed = false;
@@ -996,6 +997,10 @@ void update_trace(void)
 
 SCSAPI_VOID telemetry_frame_end(const scs_event_t, const void *const, const scs_context_t)
 {
+	const bool settings_down = input::game_has_focus() && input::key_down(VK_CONTROL) && input::key_down(VK_F10);
+	if (settings_down && !settings_key_was_down) overlay::toggle_settings();
+	settings_key_was_down = settings_down;
+
 	const bool down = input::game_has_focus() && input::key_down(TOGGLE_KEY);
 	const ULONGLONG now = GetTickCount64();
 	if (! down) {
@@ -1150,6 +1155,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
 	telemetry.head_position = DEFAULT_HEAD_POSITION;
 	game_paused = true;
 	toggle_key_was_down = false;
+	settings_key_was_down = false;
 
 	version_params->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_world_placement, SCS_U32_NIL, SCS_VALUE_TYPE_dplacement, SCS_TELEMETRY_CHANNEL_FLAG_none, telemetry_store_dplacement, &telemetry.truck_placement);
 	version_params->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float, SCS_TELEMETRY_CHANNEL_FLAG_none, telemetry_store_float, &telemetry.speed);
