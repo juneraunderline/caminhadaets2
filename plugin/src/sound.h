@@ -22,6 +22,9 @@ void landing(void);
 /** Plays the door opening/closing followed by the seatbelt when returning to the cab. */
 void truck_entered(void);
 
+/** Plays the door opening/closing when leaving the cab. */
+void truck_exited(void);
+
 /** Plays only the seatbelt when the game first starts inside the cab. */
 void startup_buckle(void);
 
