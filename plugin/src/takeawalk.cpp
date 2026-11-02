@@ -31,7 +31,7 @@
 #include "physics_trace.h"
 #include "sound.h"
 
-#define TAKEAWALK_VERSION "0.22-dev"
+#define TAKEAWALK_VERSION "0.23-dev"
 
 namespace {
 
@@ -210,6 +210,7 @@ ULONGLONG         toggle_pressed_at = 0;
 
 // Whether HUD settings left over from an earlier session were dealt with.
 bool              hud_recovered = false;
+bool              startup_buckle_played = false;
 
 bool can_leave_truck(void)
 {
@@ -627,6 +628,9 @@ void stop_walk(const bool game_closing)
 	overlay::hide();
 	overlay::set_hint(NULL);
 	walk.hint[0] = 0;
+	if (! game_closing) {
+		sound::truck_entered();
+	}
 	log_message(SCS_LOG_TYPE_message, "back in the truck");
 }
 
@@ -1004,6 +1008,11 @@ SCSAPI_VOID telemetry_frame_end(const scs_event_t, const void *const, const scs_
 		hud_recovered = true;
 		hud::recover();
 	}
+	// At startup the driver is already seated: play only the seatbelt once.
+	if (! game_paused && ! startup_buckle_played) {
+		startup_buckle_played = true;
+		sound::startup_buckle();
+	}
 
 	update_trace();
 	if (walk.active) {
@@ -1156,6 +1165,7 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
 	overlay::init();
 	sound::init();
 	hud_recovered = false;
+	startup_buckle_played = false;
 	log_message(
 		SCS_LOG_TYPE_message,
 		"version " TAKEAWALK_VERSION " loaded, walking %s, ground following %s. Park, set the parking brake and press F9",
