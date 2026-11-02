@@ -396,7 +396,8 @@ void fade_in(void)
 
 bool is_black(void)
 {
-    return alpha.load() >= 0.999f;
+    // Do not leave the camera state machine stuck if DX11 hook installation failed.
+    return !installed.load() || alpha.load() >= 0.999f;
 }
 
 } // namespace dx11_fade
