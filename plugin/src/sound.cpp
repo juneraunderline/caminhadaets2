@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
+#include <wchar.h>
 
 #include <math.h>
 #include <stdint.h>
@@ -225,6 +226,35 @@ void generate_sounds(void)
 	landing_sound = generate(0.19f, 0.12f, 62.0f, config.footstep_volume * LANDING_GAIN);
 }
 
+
+void play_mp3(const wchar_t *const relative_path, const wchar_t *const alias)
+{
+	wchar_t path[MAX_PATH];
+	if (! config_file_path(relative_path, path, MAX_PATH)) {
+		return;
+	}
+	wchar_t command[MAX_PATH + 96];
+	mciSendStringW(L"close tawenter", NULL, 0, NULL);
+	mciSendStringW(L"close tawbuckle", NULL, 0, NULL);
+	swprintf(command, MAX_PATH + 96, L"open \"%ls\" type mpegvideo alias %ls", path, alias);
+	const MCIERROR opened = mciSendStringW(command, NULL, 0, NULL);
+	if (opened != 0) {
+		wchar_t error[256] = {};
+		mciGetErrorStringW(opened, error, 256);
+		log_message(SCS_LOG_TYPE_warning, "unable to open truck sound: %ls", error);
+		return;
+	}
+	swprintf(command, MAX_PATH + 96, L"play %ls", alias);
+	const MCIERROR played = mciSendStringW(command, NULL, 0, NULL);
+	if (played != 0) {
+		wchar_t error[256] = {};
+		mciGetErrorStringW(played, error, 256);
+		log_message(SCS_LOG_TYPE_warning, "unable to play truck sound: %ls", error);
+		mciSendStringW(L"close tawenter", NULL, 0, NULL);
+		mciSendStringW(L"close tawbuckle", NULL, 0, NULL);
+	}
+}
+
 void play(const uint8_t *const wave)
 {
 	if (wave) {
@@ -252,6 +282,10 @@ void shutdown(void)
 	// The sounds live in this module, so nothing may still be playing when they are released.
 
 	PlaySoundW(NULL, NULL, 0);
+	mciSendStringW(L"stop tawenter", NULL, 0, NULL);
+	mciSendStringW(L"stop tawbuckle", NULL, 0, NULL);
+	mciSendStringW(L"close tawenter", NULL, 0, NULL);
+	mciSendStringW(L"close tawbuckle", NULL, 0, NULL);
 	for (unsigned i = 0; i < footstep_count; ++i) {
 		free(footsteps[i]);
 		footsteps[i] = NULL;
@@ -273,6 +307,16 @@ void footstep(void)
 void landing(void)
 {
 	play(landing_sound);
+}
+
+void truck_entered(void)
+{
+	play_mp3(L"takeawalk\\enter_sequence.mp3", L"tawenter");
+}
+
+void startup_buckle(void)
+{
+	play_mp3(L"takeawalk\\seatbelt.mp3", L"tawbuckle");
 }
 
 } // namespace sound
