@@ -227,31 +227,64 @@ void generate_sounds(void)
 }
 
 
-void play_mp3(const wchar_t *const relative_path, const wchar_t *const alias)
+struct audio_task_t
+{
+	bool play_door_first;
+};
+
+HANDLE audio_thread = NULL;
+
+bool play_mp3_blocking(const wchar_t *const relative_path, const wchar_t *const alias)
 {
 	wchar_t path[MAX_PATH];
 	if (! config_file_path(relative_path, path, MAX_PATH)) {
-		return;
+		return false;
 	}
 	wchar_t command[MAX_PATH + 96];
-	mciSendStringW(L"close tawenter", NULL, 0, NULL);
-	mciSendStringW(L"close tawbuckle", NULL, 0, NULL);
 	swprintf(command, MAX_PATH + 96, L"open \"%ls\" type mpegvideo alias %ls", path, alias);
 	const MCIERROR opened = mciSendStringW(command, NULL, 0, NULL);
 	if (opened != 0) {
 		wchar_t error[256] = {};
 		mciGetErrorStringW(opened, error, 256);
 		log_message(SCS_LOG_TYPE_warning, "unable to open truck sound: %ls", error);
-		return;
+		return false;
 	}
-	swprintf(command, MAX_PATH + 96, L"play %ls", alias);
+	swprintf(command, MAX_PATH + 96, L"play %ls wait", alias);
 	const MCIERROR played = mciSendStringW(command, NULL, 0, NULL);
+	mciSendStringW(alias == NULL ? L"close tawaudio" : (wcscmp(alias, L"tawdoor") == 0 ? L"close tawdoor" : L"close tawbelt"), NULL, 0, NULL);
 	if (played != 0) {
 		wchar_t error[256] = {};
 		mciGetErrorStringW(played, error, 256);
 		log_message(SCS_LOG_TYPE_warning, "unable to play truck sound: %ls", error);
-		mciSendStringW(L"close tawenter", NULL, 0, NULL);
-		mciSendStringW(L"close tawbuckle", NULL, 0, NULL);
+		return false;
+	}
+	return true;
+}
+
+DWORD WINAPI audio_thread_proc(LPVOID parameter)
+{
+	const bool play_door_first = (reinterpret_cast<INT_PTR>(parameter) != 0);
+	if (play_door_first) {
+		if (! play_mp3_blocking(L"takeawalk\\enter_sequence.mp3", L"tawdoor")) {
+			return 1;
+		}
+	}
+	play_mp3_blocking(L"takeawalk\\seatbelt.mp3", L"tawbelt");
+	return 0;
+}
+
+void start_audio_sequence(const bool play_door_first)
+{
+	if (audio_thread) {
+		if (WaitForSingleObject(audio_thread, 0) == WAIT_TIMEOUT) {
+			return; // Do not overlap entry/startup sounds.
+		}
+		CloseHandle(audio_thread);
+		audio_thread = NULL;
+	}
+	audio_thread = CreateThread(NULL, 0, audio_thread_proc, reinterpret_cast<LPVOID>(static_cast<INT_PTR>(play_door_first)), 0, NULL);
+	if (! audio_thread) {
+		log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
 	}
 }
 
@@ -282,10 +315,11 @@ void shutdown(void)
 	// The sounds live in this module, so nothing may still be playing when they are released.
 
 	PlaySoundW(NULL, NULL, 0);
-	mciSendStringW(L"stop tawenter", NULL, 0, NULL);
-	mciSendStringW(L"stop tawbuckle", NULL, 0, NULL);
-	mciSendStringW(L"close tawenter", NULL, 0, NULL);
-	mciSendStringW(L"close tawbuckle", NULL, 0, NULL);
+	if (audio_thread) {
+		WaitForSingleObject(audio_thread, INFINITE);
+		CloseHandle(audio_thread);
+		audio_thread = NULL;
+	}
 	for (unsigned i = 0; i < footstep_count; ++i) {
 		free(footsteps[i]);
 		footsteps[i] = NULL;
@@ -311,12 +345,12 @@ void landing(void)
 
 void truck_entered(void)
 {
-	play_mp3(L"takeawalk\\enter_sequence.mp3", L"tawenter");
+	start_audio_sequence(true);
 }
 
 void startup_buckle(void)
 {
-	play_mp3(L"takeawalk\\seatbelt.mp3", L"tawbuckle");
+	start_audio_sequence(false);
 }
 
 } // namespace sound
