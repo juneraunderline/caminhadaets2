@@ -36,6 +36,7 @@ setting_t settings[] = {
 	// developer mode. Players have it off, so it is on just for the walk.
 	{ "g_developer", "1", true, "", false },
 
+	{ "g_adviser", "0", false, "", false },			// hide the route-advisor widgets while walking
 	{ "g_adviser_widget_tachometer", "0", false, "", false },	// speedometer in the corner
 	{ "g_show_tutorial_hints", "0", false, "", false },		// "Driving: use W and S..." panel
 };
