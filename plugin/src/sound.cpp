@@ -325,6 +325,7 @@ DWORD WINAPI audio_thread_proc(LPVOID parameter)
 	// 0 = startup belt, 1 = entering cab (door then belt), 2 = leaving cab (door).
 	if (config.door_sounds && ((action == 1) || (action == 2))) play_wave_blocking(door_wave);
 	if (config.seatbelt_sound && ((action == 0) || (action == 1))) play_wave_blocking(belt_wave);
+	truck_audio_active.store(false, std::memory_order_release);
 	return 0;
 }
 
@@ -335,8 +336,14 @@ void start_audio_sequence(const INT_PTR action)
 		CloseHandle(audio_thread);
 		audio_thread = NULL;
 	}
+	truck_audio_active.store(true, std::memory_order_release);
+	// Stop a short footstep already using PlaySound's single playback channel.
+	PlaySoundW(NULL, NULL, 0);
 	audio_thread = CreateThread(NULL, 0, audio_thread_proc, reinterpret_cast<LPVOID>(action), 0, NULL);
-	if (!audio_thread) log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
+	if (!audio_thread) {
+		truck_audio_active.store(false, std::memory_order_release);
+		log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
+	}
 }
 
 void play(const uint8_t *const wave)
