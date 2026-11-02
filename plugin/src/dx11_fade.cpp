@@ -194,9 +194,20 @@ void draw_fade(IDXGISwapChain *chain)
     ID3D11VertexShader *old_vs = NULL;
     ID3D11PixelShader *old_ps = NULL;
     ID3D11GeometryShader *old_gs = NULL;
-    context->VSGetShader(&old_vs, NULL, NULL);
-    context->PSGetShader(&old_ps, NULL, NULL);
-    context->GSGetShader(&old_gs, NULL, NULL);
+    ID3D11HullShader *old_hs = NULL;
+    ID3D11DomainShader *old_ds = NULL;
+    ID3D11ClassInstance *vs_classes[256] = {};
+    ID3D11ClassInstance *ps_classes[256] = {};
+    ID3D11ClassInstance *gs_classes[256] = {};
+    ID3D11ClassInstance *hs_classes[256] = {};
+    ID3D11ClassInstance *ds_classes[256] = {};
+    UINT vs_count = _countof(vs_classes), ps_count = _countof(ps_classes);
+    UINT gs_count = _countof(gs_classes), hs_count = _countof(hs_classes), ds_count = _countof(ds_classes);
+    context->VSGetShader(&old_vs, vs_classes, &vs_count);
+    context->PSGetShader(&old_ps, ps_classes, &ps_count);
+    context->GSGetShader(&old_gs, gs_classes, &gs_count);
+    context->HSGetShader(&old_hs, hs_classes, &hs_count);
+    context->DSGetShader(&old_ds, ds_classes, &ds_count);
     ID3D11Buffer *old_ps_cb = NULL;
     context->PSGetConstantBuffers(0, 1, &old_ps_cb);
 
@@ -222,6 +233,8 @@ void draw_fade(IDXGISwapChain *chain)
             context->PSSetShader(pixel_shader, NULL, 0);
             context->PSSetConstantBuffers(0, 1, &alpha_buffer);
             context->GSSetShader(NULL, NULL, 0);
+            context->HSSetShader(NULL, NULL, 0);
+            context->DSSetShader(NULL, NULL, 0);
             context->Draw(3, 0);
         }
     }
@@ -233,14 +246,21 @@ void draw_fade(IDXGISwapChain *chain)
     if (old_viewport_count) context->RSSetViewports(old_viewport_count, old_viewports);
     context->IASetInputLayout(old_layout);
     context->IASetPrimitiveTopology(old_topology);
-    context->VSSetShader(old_vs, NULL, 0);
-    context->PSSetShader(old_ps, NULL, 0);
-    context->GSSetShader(old_gs, NULL, 0);
+    context->VSSetShader(old_vs, vs_classes, vs_count);
+    context->PSSetShader(old_ps, ps_classes, ps_count);
+    context->GSSetShader(old_gs, gs_classes, gs_count);
+    context->HSSetShader(old_hs, hs_classes, hs_count);
+    context->DSSetShader(old_ds, ds_classes, ds_count);
     context->PSSetConstantBuffers(0, 1, &old_ps_cb);
 
     for (UINT i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) release_if(old_targets[i]);
     release_if(old_depth); release_if(old_blend); release_if(old_depth_state); release_if(old_raster);
-    release_if(old_layout); release_if(old_vs); release_if(old_ps); release_if(old_gs); release_if(old_ps_cb);
+    release_if(old_layout); release_if(old_vs); release_if(old_ps); release_if(old_gs); release_if(old_hs); release_if(old_ds); release_if(old_ps_cb);
+    for (UINT i = 0; i < vs_count; ++i) release_if(vs_classes[i]);
+    for (UINT i = 0; i < ps_count; ++i) release_if(ps_classes[i]);
+    for (UINT i = 0; i < gs_count; ++i) release_if(gs_classes[i]);
+    for (UINT i = 0; i < hs_count; ++i) release_if(hs_classes[i]);
+    for (UINT i = 0; i < ds_count; ++i) release_if(ds_classes[i]);
 }
 
 void advance_transition(void)
