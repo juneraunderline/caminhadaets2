@@ -211,6 +211,9 @@ void draw_fade(IDXGISwapChain *chain)
     context->DSGetShader(&old_ds, ds_classes, &ds_count);
     ID3D11Buffer *old_ps_cb = NULL;
     context->PSGetConstantBuffers(0, 1, &old_ps_cb);
+    ID3D11Predicate *old_predicate = NULL;
+    BOOL old_predicate_value = FALSE;
+    context->GetPredication(&old_predicate, &old_predicate_value);
 
     D3D11_MAPPED_SUBRESOURCE mapped = {};
     if (SUCCEEDED(context->Map(alpha_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -234,6 +237,7 @@ void draw_fade(IDXGISwapChain *chain)
             context->PSSetShader(pixel_shader, NULL, 0);
             context->PSSetConstantBuffers(0, 1, &alpha_buffer);
             context->GSSetShader(NULL, NULL, 0);
+            context->SetPredication(NULL, FALSE);
             context->HSSetShader(NULL, NULL, 0);
             context->DSSetShader(NULL, NULL, 0);
             context->Draw(3, 0);
@@ -253,10 +257,11 @@ void draw_fade(IDXGISwapChain *chain)
     context->HSSetShader(old_hs, hs_classes, hs_count);
     context->DSSetShader(old_ds, ds_classes, ds_count);
     context->PSSetConstantBuffers(0, 1, &old_ps_cb);
+    context->SetPredication(old_predicate, old_predicate_value);
 
     for (UINT i = 0; i < D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) release_if(old_targets[i]);
     release_if(old_depth); release_if(old_blend); release_if(old_depth_state); release_if(old_raster);
-    release_if(old_layout); release_if(old_vs); release_if(old_ps); release_if(old_gs); release_if(old_hs); release_if(old_ds); release_if(old_ps_cb);
+    release_if(old_layout); release_if(old_vs); release_if(old_ps); release_if(old_gs); release_if(old_hs); release_if(old_ds); release_if(old_ps_cb); release_if(old_predicate);
     for (UINT i = 0; i < vs_count; ++i) release_if(vs_classes[i]);
     for (UINT i = 0; i < ps_count; ++i) release_if(ps_classes[i]);
     for (UINT i = 0; i < gs_count; ++i) release_if(gs_classes[i]);
