@@ -571,6 +571,9 @@ void start_walk(void)
 		return;
 	}
 
+	// Cover the camera switch with a short, non-blocking fade.
+	overlay::fade_transition();
+
 	// Step out beside the driver's door, facing the way the truck faces.
 
 	const float truck_yaw = telemetry.truck_placement.orientation.heading * TWO_PI;
@@ -619,6 +622,7 @@ void stop_walk(const bool game_closing)
 		return;
 	}
 	walk.active = false;
+	overlay::fade_transition();
 	overlay::set_hands(false);
 	input::capture_stop();
 	game::camera_release();
