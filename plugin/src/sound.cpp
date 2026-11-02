@@ -266,7 +266,7 @@ DWORD WINAPI audio_thread_proc(LPVOID parameter)
 	return 0;
 }
 
-void start_audio_sequence(const bool play_door_first)
+void start_audio_sequence(const INT_PTR action)
 {
 	if (audio_thread) {
 		if (WaitForSingleObject(audio_thread, 0) == WAIT_TIMEOUT) {
@@ -275,7 +275,7 @@ void start_audio_sequence(const bool play_door_first)
 		CloseHandle(audio_thread);
 		audio_thread = NULL;
 	}
-	audio_thread = CreateThread(NULL, 0, audio_thread_proc, reinterpret_cast<LPVOID>(static_cast<INT_PTR>(play_door_first)), 0, NULL);
+	audio_thread = CreateThread(NULL, 0, audio_thread_proc, reinterpret_cast<LPVOID>(action), 0, NULL);
 	if (! audio_thread) {
 		log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
 	}
@@ -338,12 +338,17 @@ void landing(void)
 
 void truck_entered(void)
 {
-	start_audio_sequence(true);
+	start_audio_sequence(1); // Door, then seatbelt.
+}
+
+void truck_exited(void)
+{
+	start_audio_sequence(2); // Door only.
 }
 
 void startup_buckle(void)
 {
-	start_audio_sequence(false);
+	start_audio_sequence(0); // Seatbelt only.
 }
 
 } // namespace sound
