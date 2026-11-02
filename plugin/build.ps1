@@ -107,7 +107,7 @@ $cmdLines = @(
     '@echo off'
     ('call "' + $vcvars + '" >nul')
     'if errorlevel 1 exit /b %errorlevel%'
-    ('cl.exe /nologo @"' + $responseFile + '" /link user32.lib gdi32.lib winmm.lib /DEF:src\takeawalk.def /EXPORT:scs_telemetry_init /EXPORT:scs_telemetry_shutdown /IMPLIB:build\takeawalk.lib')
+    ('cl.exe /nologo @"' + $responseFile + '" /link user32.lib gdi32.lib winmm.lib mfplat.lib mfreadwrite.lib mfuuid.lib ole32.lib /DEF:src\takeawalk.def /EXPORT:scs_telemetry_init /EXPORT:scs_telemetry_shutdown /IMPLIB:build\takeawalk.lib')
     'if errorlevel 1 exit /b %errorlevel%'
     'dumpbin.exe /nologo /exports build\takeawalk.dll > build\exports.txt'
     'if errorlevel 1 exit /b %errorlevel%'
