@@ -590,6 +590,12 @@ void fade_out(void)
 	if (!fade_window) return;
 	if (fade_black) ResetEvent(fade_black);
 	PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
+	// Keep the game thread here until the independent overlay thread has
+	// actually painted a fully opaque black frame. This guarantees the camera
+	// switch happens behind black, not during the fade animation.
+	if (fade_black) {
+		WaitForSingleObject(fade_black, FADE_OUT_MS + 700);
+	}
 }
 
 /** Fade back from black after the camera has changed. */
