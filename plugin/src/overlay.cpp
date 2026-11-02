@@ -27,6 +27,7 @@ const DWORD FADE_HOLD_MS = 350;
 const BYTE FADE_MAX_ALPHA = 255;
 HANDLE fade_black = NULL;
 int fade_stage = 0;
+bool fade_in_requested = false;
 
 const UINT DISPLAY_TIME_MS = 4000;
 
@@ -393,7 +394,10 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 			return 0;
 		}
 		case MESSAGE_FADE_IN: {
-			if (fade_window) {
+			// The game thread never waits for the overlay. If the camera switch
+			// requested the reveal while fading out, start it only after black.
+			fade_in_requested = true;
+			if (fade_window && fade_stage == 3) {
 				fade_stage = 2;
 				fade_started = GetTickCount64();
 				SetTimer(fade_window, FADE_TIMER, 16, NULL);
@@ -418,6 +422,7 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 						SWP_NOACTIVATE | SWP_SHOWWINDOW);
 					fade_started = GetTickCount64();
 					fade_stage = 1;
+					fade_in_requested = false;
 					SetLayeredWindowAttributes(fade_window, RGB(0, 0, 0), 0, LWA_ALPHA);
 					SetTimer(fade_window, FADE_TIMER, 16, NULL);
 				}
@@ -433,7 +438,13 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 					SetLayeredWindowAttributes(handle, RGB(0, 0, 0), alpha, LWA_ALPHA);
 					if (phase >= 1.0f) {
 						KillTimer(handle, FADE_TIMER);
+						fade_stage = 3; // Fully black; wait without blocking the game.
 						if (fade_black) SetEvent(fade_black);
+						if (fade_in_requested) {
+							fade_stage = 2;
+							fade_started = GetTickCount64();
+							SetTimer(handle, FADE_TIMER, 16, NULL);
+						}
 					}
 				}
 				else if (fade_stage == 2) {
@@ -573,13 +584,12 @@ void hide(void)
 	}
 }
 
-/** Fade fully to black and wait until the overlay covers the camera switch. */
+/** Start fading to black asynchronously; never stall the game's render thread. */
 void fade_out(void)
 {
-	if (!fade_window || !fade_black) return;
-	ResetEvent(fade_black);
+	if (!fade_window) return;
+	if (fade_black) ResetEvent(fade_black);
 	PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
-	WaitForSingleObject(fade_black, 2200);
 }
 
 /** Fade back from black after the camera has changed. */
