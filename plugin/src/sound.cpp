@@ -341,7 +341,7 @@ void start_audio_sequence(const INT_PTR action)
 
 void play(const uint8_t *const wave)
 {
-	if (wave) {
+	if (wave && ! truck_audio_active.load(std::memory_order_acquire)) {
 		PlaySoundW(reinterpret_cast<LPCWSTR>(wave), NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
 	}
 }
