@@ -52,6 +52,8 @@ void config_load(void)
 	config.max_distance = 0.0f;
 	config.head_bob = true;
 	config.footsteps = true;
+	config.door_sounds = true;
+	config.seatbelt_sound = true;
 	config.footstep_volume = 0.2f;
 	config.hide_hud = true;
 	config.hide_driver = true;
@@ -69,6 +71,8 @@ void config_load(void)
 	config.max_distance = read_float(path, L"walk", L"max_distance", config.max_distance);
 	config.head_bob = read_bool(path, L"walk", L"head_bob", config.head_bob);
 	config.footsteps = read_bool(path, L"walk", L"footsteps", config.footsteps);
+	config.door_sounds = read_bool(path, L"sound", L"door_sounds", config.door_sounds);
+	config.seatbelt_sound = read_bool(path, L"sound", L"seatbelt_sound", config.seatbelt_sound);
 	config.footstep_volume = read_float(path, L"walk", L"footstep_volume", config.footstep_volume);
 	config.hide_hud = read_bool(path, L"walk", L"hide_hud", config.hide_hud);
 	config.hide_driver = read_bool(path, L"walk", L"hide_driver", config.hide_driver);
