@@ -43,6 +43,9 @@ void set_world_position(placement_t &placement, double x, double y, double z);
  */
 bool camera_attach(void);
 
+/** Reads the currently selected camera placement without changing it. */
+bool camera_current_placement(placement_t &placement);
+
 /**
  * @brief Switches the game to the free camera and stops the engine from moving it.
  *
