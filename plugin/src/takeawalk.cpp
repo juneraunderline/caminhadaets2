@@ -31,7 +31,7 @@
 #include "physics_trace.h"
 #include "sound.h"
 
-#define TAKEAWALK_VERSION "0.21-dev"
+#define TAKEAWALK_VERSION "0.22-dev"
 
 namespace {
 
