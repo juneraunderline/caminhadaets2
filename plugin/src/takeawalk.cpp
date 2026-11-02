@@ -31,7 +31,7 @@
 #include "physics_trace.h"
 #include "sound.h"
 
-#define TAKEAWALK_VERSION "0.19-dev"
+#define TAKEAWALK_VERSION "0.21-dev"
 
 namespace {
 
@@ -609,7 +609,6 @@ void start_walk(void)
 
 	game::driver_set_hidden(config.hide_driver);
 	log_message(SCS_LOG_TYPE_message, "on foot");
-	overlay::show("On foot.  WASD move  \xC2\xB7  Shift run  \xC2\xB7  Ctrl crouch  \xC2\xB7  Space jump");
 }
 
 void stop_walk(const bool game_closing)
@@ -646,14 +645,15 @@ void update_hint(const bool visible)
 	if (visible && config.key_hint) {
 		double door[3];
 		door_position(door);
-		const double distance = distance_to(door[0], door[2]);
-		if (distance <= ENTER_DISTANCE) {
-			snprintf(hint, sizeof(hint), "[F9] Get in\n[E] Inspect object ahead");
-		}
-		else {
-			// A press does nothing this far from the door, so that line is faded.
-
-			snprintf(hint, sizeof(hint), "~[F9] Get in at the driver's door, %.0f m away\n[Hold F9] Back to the cab from here", distance);
+		const double dx = door[0] - walk.position[0];
+		const double dz = door[2] - walk.position[2];
+		const double distance = sqrt(dx * dx + dz * dz);
+		const float forward_x = -sinf(walk.yaw);
+		const float forward_z = -cosf(walk.yaw);
+		const float facing = (distance > 0.001) ? static_cast<float>((dx * forward_x + dz * forward_z) / distance) : 1.0f;
+		// Show one concise prompt only when close to, and looking toward, the driver's door.
+		if ((distance <= ENTER_DISTANCE + 1.0f) && (facing >= 0.65f) && (fabsf(walk.pitch) <= 0.55f)) {
+			snprintf(hint, sizeof(hint), "[F9] Entrar no caminhão");
 		}
 	}
 	if (strcmp(hint, walk.hint) != 0) {
