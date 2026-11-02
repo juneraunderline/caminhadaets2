@@ -27,6 +27,9 @@ void hide(void);
 /** Brief non-blocking fade over the game during cab/walking camera transitions. */
 void fade_transition(void);
 
+/** Toggle the small sound settings panel (Ctrl+F10). */
+void toggle_settings(void);
+
 /** Shows or hides the first-person forearm/hand overlay while walking. */
 void set_hands(bool visible);
 
