@@ -7,7 +7,6 @@
 #include <wchar.h>
 #include <vector>
 #include <atomic>
-#include <mutex>
 
 #include <math.h>
 #include <stdint.h>
@@ -234,9 +233,6 @@ void generate_sounds(void)
 
 
 HANDLE audio_thread = NULL;
-std::mutex audio_lock;
-bool audio_thread_running = false;
-INT_PTR pending_audio_action = -1;
 // PlaySoundW uses one process-wide playback slot. Keep footsteps from replacing
 // the door/seatbelt sequence while the truck transition audio is playing.
 std::atomic<bool> truck_audio_active(false);
@@ -323,45 +319,28 @@ void play_wave_blocking(const uint8_t *wave)
 	if (wave) PlaySoundW(reinterpret_cast<LPCWSTR>(wave), NULL, SND_MEMORY | SND_SYNC | SND_NODEFAULT);
 }
 
-DWORD WINAPI audio_thread_proc(LPVOID)
+DWORD WINAPI audio_thread_proc(LPVOID parameter)
 {
-	for (;;) {
-		INT_PTR action;
-		{
-			std::lock_guard<std::mutex> guard(audio_lock);
-			action = pending_audio_action;
-			pending_audio_action = -1;
-			if (action < 0) {
-				audio_thread_running = false;
-				truck_audio_active.store(false, std::memory_order_release);
-				return 0;
-			}
-		}
-		// 0 = startup belt, 1 = entering cab (door then belt), 2 = leaving cab (door).
-		if (config.door_sounds && ((action == 1) || (action == 2))) play_wave_blocking(door_wave);
-		if (config.seatbelt_sound && ((action == 0) || (action == 1))) play_wave_blocking(belt_wave);
-	}
+	const INT_PTR action = reinterpret_cast<INT_PTR>(parameter);
+	// 0 = startup belt, 1 = entering cab (door then belt), 2 = leaving cab (door).
+	if (config.door_sounds && ((action == 1) || (action == 2))) play_wave_blocking(door_wave);
+	if (config.seatbelt_sound && ((action == 0) || (action == 1))) play_wave_blocking(belt_wave);
+	truck_audio_active.store(false, std::memory_order_release);
+	return 0;
 }
 
 void start_audio_sequence(const INT_PTR action)
 {
-	std::lock_guard<std::mutex> guard(audio_lock);
-	pending_audio_action = action;
-	if (audio_thread_running) return;
-
 	if (audio_thread) {
-		WaitForSingleObject(audio_thread, INFINITE);
+		if (WaitForSingleObject(audio_thread, 0) == WAIT_TIMEOUT) return;
 		CloseHandle(audio_thread);
 		audio_thread = NULL;
 	}
 	truck_audio_active.store(true, std::memory_order_release);
 	// Stop a short footstep already using PlaySound's single playback channel.
 	PlaySoundW(NULL, NULL, 0);
-	audio_thread_running = true;
-	audio_thread = CreateThread(NULL, 0, audio_thread_proc, NULL, 0, NULL);
+	audio_thread = CreateThread(NULL, 0, audio_thread_proc, reinterpret_cast<LPVOID>(action), 0, NULL);
 	if (!audio_thread) {
-		audio_thread_running = false;
-		pending_audio_action = -1;
 		truck_audio_active.store(false, std::memory_order_release);
 		log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
 	}
