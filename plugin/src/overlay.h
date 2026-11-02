@@ -25,7 +25,8 @@ void show(const char *text);
 void hide(void);
 
 /** Brief non-blocking fade over the game during cab/walking camera transitions. */
-void fade_transition(void);
+void fade_out(void);
+void fade_in(void);
 
 /** Toggle the small sound settings panel (Ctrl+F10). */
 void toggle_settings(void);
