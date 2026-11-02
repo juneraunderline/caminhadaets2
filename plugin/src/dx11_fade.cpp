@@ -27,6 +27,8 @@ void **swapchain_vtable = NULL;
 std::atomic<float> alpha(0.0f);
 std::atomic<int> transition(0); // 0 idle, 1 fading out, 2 fading in
 std::atomic<bool> installed(false);
+// Set only after an opaque frame has actually been submitted through Present.
+std::atomic<bool> black_frame_presented(false);
 std::atomic<ULONGLONG> transition_started(0);
 std::atomic<float> transition_initial_alpha(0.0f);
 std::mutex resource_lock;
@@ -163,12 +165,13 @@ bool ensure_target(IDXGISwapChain *chain)
 
 template<class T> void release_if(T *p) { if (p) p->Release(); }
 
-void draw_fade(IDXGISwapChain *chain)
+bool draw_fade(IDXGISwapChain *chain)
 {
     const float a = alpha.load(std::memory_order_relaxed);
-    if (a <= 0.001f) return;
+    if (a <= 0.001f) return false;
     std::lock_guard<std::mutex> guard(resource_lock);
-    if (!ensure_target(chain)) return;
+    if (!ensure_target(chain)) return false;
+    bool rendered = false;
 
     ID3D11RenderTargetView *old_targets[ D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT ] = {};
     ID3D11DepthStencilView *old_depth = NULL;
@@ -241,6 +244,7 @@ void draw_fade(IDXGISwapChain *chain)
             context->HSSetShader(NULL, NULL, 0);
             context->DSSetShader(NULL, NULL, 0);
             context->Draw(3, 0);
+            rendered = true;
         }
     }
 
@@ -267,6 +271,7 @@ void draw_fade(IDXGISwapChain *chain)
     for (UINT i = 0; i < gs_count; ++i) release_if(gs_classes[i]);
     for (UINT i = 0; i < hs_count; ++i) release_if(hs_classes[i]);
     for (UINT i = 0; i < ds_count; ++i) release_if(ds_classes[i]);
+    return rendered;
 }
 
 void advance_transition(void)
@@ -286,8 +291,17 @@ void advance_transition(void)
 HRESULT STDMETHODCALLTYPE hooked_present(IDXGISwapChain *chain, UINT sync, UINT flags)
 {
     advance_transition();
-    draw_fade(chain);
-    return original_present ? original_present(chain, sync, flags) : S_OK;
+    const bool rendered = draw_fade(chain);
+    const HRESULT result = original_present ? original_present(chain, sync, flags) : S_OK;
+    // Do not let the telemetry callback switch cameras merely because the alpha
+    // reached 1.0: the opaque frame must first pass through the game's Present.
+    if (rendered && alpha.load(std::memory_order_relaxed) >= 0.999f) {
+        black_frame_presented.store(true, std::memory_order_release);
+    }
+    else if (alpha.load(std::memory_order_relaxed) < 0.999f) {
+        black_frame_presented.store(false, std::memory_order_release);
+    }
+    return result;
 }
 
 HRESULT STDMETHODCALLTYPE hooked_resize(IDXGISwapChain *chain, UINT count, UINT width, UINT height, DXGI_FORMAT format, UINT flags)
@@ -386,6 +400,7 @@ void shutdown(void)
 {
     transition.store(0);
     alpha.store(0.0f);
+    black_frame_presented.store(false);
     if (swapchain_vtable && original_present) {
         DWORD old_protect = 0;
         if (VirtualProtect(&swapchain_vtable[8], sizeof(void *), PAGE_EXECUTE_READWRITE, &old_protect)) {
@@ -408,6 +423,7 @@ void shutdown(void)
 
 void fade_out(void)
 {
+    black_frame_presented.store(false, std::memory_order_release);
     transition_initial_alpha.store(alpha.load());
     transition_started.store(GetTickCount64());
     transition.store(1);
@@ -415,6 +431,7 @@ void fade_out(void)
 
 void fade_in(void)
 {
+    black_frame_presented.store(false, std::memory_order_release);
     transition_initial_alpha.store(alpha.load());
     transition_started.store(GetTickCount64());
     transition.store(2);
@@ -422,8 +439,15 @@ void fade_in(void)
 
 bool is_black(void)
 {
-    // Do not leave the camera state machine stuck if DX11 hook installation failed.
-    return !installed.load() || alpha.load() >= 0.999f;
+    // If hook installation failed, preserve the old fail-open behavior. Otherwise,
+    // require a genuinely rendered opaque frame, not merely an alpha value updated
+    // by Present before the game has displayed that frame.
+    if (!installed.load(std::memory_order_acquire)) return true;
+    if (black_frame_presented.load(std::memory_order_acquire)) return true;
+    // Safety timeout for drivers whose swapchain does not share the patched vtable.
+    if (transition.load(std::memory_order_relaxed) == 1 &&
+        GetTickCount64() - transition_started.load(std::memory_order_relaxed) >= 3500) return true;
+    return false;
 }
 
 } // namespace dx11_fade
