@@ -30,6 +30,7 @@ New-Item -ItemType Directory -Force -Path $sounds | Out-Null
 Copy-Item -LiteralPath (Join-Path $out 'takeawalk.dll')   -Destination $plugins
 Copy-Item -LiteralPath (Join-Path $root 'takeawalk.ini')  -Destination $plugins
 Copy-Item -Path (Join-Path $root 'sounds\*.ogg')          -Destination $sounds
+Copy-Item -Path (Join-Path $root 'sounds\*.mp3')          -Destination $sounds
 foreach ($file in 'install.bat', 'uninstall.bat', 'install.ps1', 'README.txt', 'THIRD-PARTY.txt') {
 	Copy-Item -LiteralPath (Join-Path $root "release\$file") -Destination $stage
 }
