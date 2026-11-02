@@ -391,6 +391,41 @@ bool truck_found_at(const int chunk_x, const int chunk_z, const double truck_x, 
 }
 
 /**
+ * @brief Tries to locate the physics origin from static ground when the truck's
+ * dynamic actor is absent from the query scene.
+ *
+ * Some game builds expose map collision before the truck actor is queryable.
+ * Three nearby ground samples must agree with a plausible height around the truck.
+ */
+int static_ground_samples(const int chunk_x, const int chunk_z, const double truck_x, const double truck_y, const double truck_z)
+{
+	const float offsets[] = { -1.5f, 0.0f, 1.5f };
+	int hits = 0;
+	float lowest = FLT_MAX;
+	float highest = -FLT_MAX;
+	for (const float offset : offsets) {
+		float height = 0.0f;
+		if (! raycast_down(
+			to_physics(truck_x, chunk_x),
+			static_cast<float>(truck_y) + LOCATE_ABOVE,
+			to_physics(truck_z, chunk_z) + offset,
+			LOCATE_ABOVE + LOCATE_BELOW,
+			QUERY_STATIC,
+			height
+		)) {
+			continue;
+		}
+		if ((height < truck_y - 3.0) || (height > truck_y + 1.5)) {
+			continue;
+		}
+		++hits;
+		if (height < lowest) { lowest = height; }
+		if (height > highest) { highest = height; }
+	}
+	return ((highest - lowest) <= 1.0f) ? hits : 0;
+}
+
+/**
  * @brief Logs what the physics world does contain around the candidate origins, to
  * work out why the truck was not found.
  */
@@ -562,6 +597,33 @@ bool physics_locate(const double truck_x, const double truck_y, const double tru
 					break;
 				}
 			}
+		}
+	}
+
+	// Fallback for builds where the truck's dynamic actor is not exposed to raycasts.
+	// The log from the user's 1.61.1.9 session showed static ground under the truck
+	// but no dynamic truck hits, so accept only a consistent cluster of nearby ground.
+	if (! origin_known && ! faulted) {
+		int best_samples = 0;
+		int best_x = truck_chunk_x;
+		int best_z = truck_chunk_z;
+		for (int dx = -4; dx <= 4; ++dx) {
+			for (int dz = -4; dz <= 4; ++dz) {
+				const int samples = static_ground_samples(truck_chunk_x + dx, truck_chunk_z + dz, truck_x, truck_y, truck_z);
+				if (samples > best_samples) {
+					best_samples = samples;
+					best_x = truck_chunk_x + dx;
+					best_z = truck_chunk_z + dz;
+				}
+			}
+		}
+		if (best_samples >= 2) {
+			origin_known = true;
+			origin_chunk_x = best_x;
+			origin_chunk_z = best_z;
+			log_message(SCS_LOG_TYPE_warning,
+				"physics origin located from static ground fallback at chunk (%d, %d), %d consistent samples; truck actor was not queryable",
+				best_x, best_z, best_samples);
 		}
 	}
 
