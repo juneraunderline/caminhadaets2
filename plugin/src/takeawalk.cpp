@@ -626,10 +626,8 @@ void start_walk(void)
 {
 	if (camera_transition != transition_none) return;
 	hud::hide();
-	if (! game::camera_take(cab_reference)) {
-		hud::restore(false);
-		return;
-	}
+	// Fade completely to black before taking control of the game camera.
+	// Taking it here can expose the camera hand-off before the fade has finished.
 	camera_transition = transition_entering;
 	overlay::fade_out();
 }
@@ -651,6 +649,14 @@ void update_camera_transition(void)
 {
 	if (camera_transition == transition_none || ! overlay::fade_is_black()) return;
 	if (camera_transition == transition_entering) {
+		// This callback runs only after a fully black frame has been presented.
+		if (! game::camera_take(cab_reference)) {
+			camera_transition = transition_none;
+			hud::restore(false);
+			overlay::fade_in();
+			log_message(SCS_LOG_TYPE_warning, "could not take camera after fade-out; walk transition cancelled");
+			return;
+		}
 		finish_start_walk();
 	}
 	else if (camera_transition == transition_exiting) {
