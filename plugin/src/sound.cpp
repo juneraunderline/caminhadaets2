@@ -227,11 +227,6 @@ void generate_sounds(void)
 }
 
 
-struct audio_task_t
-{
-	bool play_door_first;
-};
-
 HANDLE audio_thread = NULL;
 
 bool play_mp3_blocking(const wchar_t *const relative_path, const wchar_t *const alias)
@@ -265,9 +260,7 @@ DWORD WINAPI audio_thread_proc(LPVOID parameter)
 {
 	const bool play_door_first = (reinterpret_cast<INT_PTR>(parameter) != 0);
 	if (play_door_first) {
-		if (! play_mp3_blocking(L"takeawalk\\enter_sequence.mp3", L"tawdoor")) {
-			return 1;
-		}
+		play_mp3_blocking(L"takeawalk\\enter_sequence.mp3", L"tawdoor");
 	}
 	play_mp3_blocking(L"takeawalk\\seatbelt.mp3", L"tawbelt");
 	return 0;
