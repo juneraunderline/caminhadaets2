@@ -22,6 +22,10 @@ struct config_t
 
 	bool footsteps;
 
+	// Play door and seatbelt sounds on cab transitions.
+	bool door_sounds;
+	bool seatbelt_sound;
+
 	/**
 	 * @brief Loudness of the footsteps, 0 to 1.
 	 */
