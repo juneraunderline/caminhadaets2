@@ -155,6 +155,7 @@ if ($Install) {
     Get-ChildItem -LiteralPath $soundDestination -Filter 'footstep*.ogg' -File |
         Remove-Item -Force
     Copy-Item -Path (Join-Path $root 'sounds\*.ogg') -Destination $soundDestination -Force
+    Copy-Item -Path (Join-Path $root 'sounds\*.mp3') -Destination $soundDestination -Force
 
     $settings = Join-Path $plugins 'takeawalk.ini'
     if (-not (Test-Path -LiteralPath $settings)) {
