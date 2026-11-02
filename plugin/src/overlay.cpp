@@ -18,10 +18,16 @@ const UINT_PTR HIDE_TIMER = 1;
 const UINT_PTR FADE_TIMER = 2;
 const UINT MESSAGE_FADE = WM_APP + 3;
 const UINT MESSAGE_SETTINGS = WM_APP + 4;
+const UINT MESSAGE_FADE_IN = WM_APP + 5;
 const int ID_DOOR_SOUND = 4101;
 const int ID_BELT_SOUND = 4102;
-const DWORD FADE_DURATION_MS = 1400;
+const DWORD FADE_OUT_MS = 1200;
+const DWORD FADE_IN_MS = 1500;
+const DWORD FADE_HOLD_MS = 350;
 const BYTE FADE_MAX_ALPHA = 255;
+const UINT_PTR FADE_HOLD_TIMER = 3;
+HANDLE fade_black = NULL;
+int fade_stage = 0;
 
 const UINT DISPLAY_TIME_MS = 4000;
 
@@ -387,6 +393,14 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 			ShowWindow(handle, SW_HIDE);
 			return 0;
 		}
+		case MESSAGE_FADE_IN: {
+			if (fade_window) {
+				fade_stage = 2;
+				fade_started = GetTickCount64();
+				SetTimer(fade_window, FADE_TIMER, 16, NULL);
+			}
+			return 0;
+		}
 		case MESSAGE_SETTINGS: {
 			if (settings_window) {
 				const bool visible = IsWindowVisible(settings_window) != FALSE;
@@ -404,6 +418,7 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 						rect.right - rect.left, rect.bottom - rect.top,
 						SWP_NOACTIVATE | SWP_SHOWWINDOW);
 					fade_started = GetTickCount64();
+					fade_stage = 1;
 					SetLayeredWindowAttributes(fade_window, RGB(0, 0, 0), 0, LWA_ALPHA);
 					SetTimer(fade_window, FADE_TIMER, 16, NULL);
 				}
@@ -411,17 +426,34 @@ LRESULT CALLBACK window_procedure(HWND handle, UINT message, WPARAM wparam, LPAR
 			return 0;
 		}
 		case WM_TIMER: {
+			if (wparam == FADE_HOLD_TIMER) {
+				KillTimer(handle, FADE_HOLD_TIMER);
+				fade_stage = 2;
+				fade_started = GetTickCount64();
+				SetTimer(handle, FADE_TIMER, 16, NULL);
+				return 0;
+			}
 			if (wparam == FADE_TIMER) {
 				const ULONGLONG elapsed = GetTickCount64() - fade_started;
-				if (elapsed >= FADE_DURATION_MS) {
-					KillTimer(handle, FADE_TIMER);
-					ShowWindow(handle, SW_HIDE);
-				}
-				else {
-					const float phase = static_cast<float>(elapsed) / FADE_DURATION_MS;
-					const float envelope = (phase < 0.5f) ? (phase * 2.0f) : ((1.0f - phase) * 2.0f);
-					const BYTE alpha = static_cast<BYTE>(FADE_MAX_ALPHA * envelope);
+				if (fade_stage == 1) {
+					const float phase = (elapsed >= FADE_OUT_MS) ? 1.0f : static_cast<float>(elapsed) / FADE_OUT_MS;
+					const BYTE alpha = static_cast<BYTE>(FADE_MAX_ALPHA * phase);
 					SetLayeredWindowAttributes(handle, RGB(0, 0, 0), alpha, LWA_ALPHA);
+					if (phase >= 1.0f) {
+						KillTimer(handle, FADE_TIMER);
+						if (fade_black) SetEvent(fade_black);
+						SetTimer(handle, FADE_HOLD_TIMER, FADE_HOLD_MS, NULL);
+					}
+				}
+				else if (fade_stage == 2) {
+					const float phase = (elapsed >= FADE_IN_MS) ? 1.0f : static_cast<float>(elapsed) / FADE_IN_MS;
+					const BYTE alpha = static_cast<BYTE>(FADE_MAX_ALPHA * (1.0f - phase));
+					SetLayeredWindowAttributes(handle, RGB(0, 0, 0), alpha, LWA_ALPHA);
+					if (phase >= 1.0f) {
+						KillTimer(handle, FADE_TIMER);
+						fade_stage = 0;
+						ShowWindow(handle, SW_HIDE);
+					}
 				}
 				return 0;
 			}
@@ -502,6 +534,7 @@ bool init(void)
 {
 	InitializeCriticalSection(&lock);
 	ready = CreateEventW(NULL, TRUE, FALSE, NULL);
+	fade_black = CreateEventW(NULL, TRUE, FALSE, NULL);
 	thread = CreateThread(NULL, 0, thread_main, NULL, 0, &thread_id);
 	if (! thread) {
 		return false;
@@ -523,6 +556,7 @@ void shutdown(void)
 		CloseHandle(ready);
 		ready = NULL;
 	}
+	if (fade_black) { CloseHandle(fade_black); fade_black = NULL; }
 }
 
 void show(const char *const text)
@@ -548,11 +582,20 @@ void hide(void)
 	}
 }
 
-/** Brief black fade around a camera transition, without blocking the telemetry thread. */
-void fade_transition(void)
+/** Fade fully to black and wait until the overlay covers the camera switch. */
+void fade_out(void)
+{
+	if (!fade_window || !fade_black) return;
+	ResetEvent(fade_black);
+	PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
+	WaitForSingleObject(fade_black, 2200);
+}
+
+/** Fade back from black after the camera has changed. */
+void fade_in(void)
 {
 	if (fade_window) {
-		PostMessageW(fade_window, MESSAGE_FADE, 0, 0);
+		PostMessageW(fade_window, MESSAGE_FADE_IN, 0, 0);
 	}
 }
 
