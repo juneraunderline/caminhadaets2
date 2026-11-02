@@ -6,6 +6,7 @@
 #include <mfreadwrite.h>
 #include <wchar.h>
 #include <vector>
+#include <atomic>
 
 #include <math.h>
 #include <stdint.h>
@@ -232,6 +233,9 @@ void generate_sounds(void)
 
 
 HANDLE audio_thread = NULL;
+// PlaySoundW uses one process-wide playback slot. Keep footsteps from replacing
+// the door/seatbelt sequence while the truck transition audio is playing.
+std::atomic<bool> truck_audio_active(false);
 uint8_t *door_wave = NULL;
 size_t door_wave_size = 0;
 uint8_t *belt_wave = NULL;
