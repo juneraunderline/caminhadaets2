@@ -1,7 +1,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
 #include <wchar.h>
+#include <vector>
 
 #include <math.h>
 #include <stdint.h>
@@ -228,61 +232,109 @@ void generate_sounds(void)
 
 
 HANDLE audio_thread = NULL;
+uint8_t *door_wave = NULL;
+size_t door_wave_size = 0;
+uint8_t *belt_wave = NULL;
+size_t belt_wave_size = 0;
 
-bool play_mp3_blocking(const wchar_t *const relative_path, const wchar_t *const alias)
+/*
+ * Decode MP3 to 16-bit PCM through Windows Media Foundation. MCI's MP3 path
+ * was responsible for distorted playback on some ETS2 systems; this produces
+ * a normal in-memory WAV and lets the Windows waveOut backend play it.
+ */
+uint8_t *load_mp3_wave(const wchar_t *const relative_path, size_t &wave_size)
 {
 	wchar_t path[MAX_PATH];
-	if (! config_file_path(relative_path, path, MAX_PATH)) {
-		return false;
+	if (! config_file_path(relative_path, path, MAX_PATH)) return NULL;
+
+	HRESULT com_result = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	const bool uninitialize_com = SUCCEEDED(com_result);
+	HRESULT hr = MFStartup(MF_VERSION, MFSTARTUP_LITE);
+	if (FAILED(hr)) {
+		if (uninitialize_com) CoUninitialize();
+		log_message(SCS_LOG_TYPE_warning, "Windows Media Foundation could not start (0x%08lX)", hr);
+		return NULL;
 	}
-	wchar_t command[MAX_PATH + 96];
-	swprintf(command, MAX_PATH + 96, L"open \"%ls\" type mpegvideo alias %ls", path, alias);
-	const MCIERROR opened = mciSendStringW(command, NULL, 0, NULL);
-	if (opened != 0) {
-		wchar_t error[256] = {};
-		mciGetErrorStringW(opened, error, 256);
-		log_message(SCS_LOG_TYPE_warning, "unable to open truck sound: %ls", error);
-		return false;
+
+	IMFSourceReader *reader = NULL;
+	IMFMediaType *type = NULL;
+	std::vector<short> pcm;
+	UINT32 channels = 0, rate = 0;
+	hr = MFCreateSourceReaderFromURL(path, NULL, &reader);
+	if (SUCCEEDED(hr)) hr = MFCreateMediaType(&type);
+	if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+	if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
+	if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 2);
+	if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, 44100);
+	if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+	if (SUCCEEDED(hr)) hr = reader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, NULL, type);
+	if (SUCCEEDED(hr)) hr = reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &type);
+	if (SUCCEEDED(hr)) hr = type->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &channels);
+	if (SUCCEEDED(hr)) hr = type->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate);
+
+	while (SUCCEEDED(hr)) {
+		DWORD flags = 0;
+		IMFSample *sample = NULL;
+		hr = reader->ReadSample(MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, NULL, &flags, NULL, &sample);
+		if (FAILED(hr) || (flags & MF_SOURCE_READERF_ENDOFSTREAM)) {
+			if (sample) sample->Release();
+			break;
+		}
+		if (sample) {
+			IMFMediaBuffer *buffer = NULL;
+			hr = sample->ConvertToContiguousBuffer(&buffer);
+			if (SUCCEEDED(hr)) {
+				BYTE *bytes = NULL; DWORD length = 0, maximum = 0;
+				hr = buffer->Lock(&bytes, &maximum, &length);
+				if (SUCCEEDED(hr)) {
+					const size_t old_size = pcm.size();
+					pcm.resize(old_size + length / sizeof(short));
+					memcpy(&pcm[old_size], bytes, length);
+					buffer->Unlock();
+				}
+				buffer->Release();
+			}
+			sample->Release();
+		}
 	}
-	swprintf(command, MAX_PATH + 96, L"play %ls wait", alias);
-	const MCIERROR played = mciSendStringW(command, NULL, 0, NULL);
-	mciSendStringW(alias == NULL ? L"close tawaudio" : (wcscmp(alias, L"tawdoor") == 0 ? L"close tawdoor" : L"close tawbelt"), NULL, 0, NULL);
-	if (played != 0) {
-		wchar_t error[256] = {};
-		mciGetErrorStringW(played, error, 256);
-		log_message(SCS_LOG_TYPE_warning, "unable to play truck sound: %ls", error);
-		return false;
+	if (type) type->Release();
+	if (reader) reader->Release();
+	MFShutdown();
+	if (uninitialize_com) CoUninitialize();
+
+	if (FAILED(hr) || pcm.empty() || channels == 0 || rate == 0) {
+		log_message(SCS_LOG_TYPE_warning, "could not decode door sound MP3 (0x%08lX)", hr);
+		return NULL;
 	}
-	return true;
+	const float gain = 0.55f;
+	uint8_t *wave = make_wave(&pcm[0], pcm.size(), static_cast<int>(channels), static_cast<int>(rate), gain);
+	if (wave) wave_size = sizeof(wave_header_t) + pcm.size() * sizeof(short);
+	return wave;
+}
+
+void play_wave_blocking(const uint8_t *wave)
+{
+	if (wave) PlaySoundW(reinterpret_cast<LPCWSTR>(wave), NULL, SND_MEMORY | SND_SYNC | SND_NODEFAULT);
 }
 
 DWORD WINAPI audio_thread_proc(LPVOID parameter)
 {
 	const INT_PTR action = reinterpret_cast<INT_PTR>(parameter);
-	// 0 = seatbelt only (game startup), 1 = door + seatbelt (enter cab),
-	// 2 = door only (leave cab). Keep the exit sound independent from the belt.
-	if ((action == 1) || (action == 2)) {
-		play_mp3_blocking(L"takeawalk\\enter_sequence.mp3", L"tawdoor");
-	}
-	if ((action == 0) || (action == 1)) {
-		play_mp3_blocking(L"takeawalk\\seatbelt.mp3", L"tawbelt");
-	}
+	// 0 = startup belt, 1 = entering cab (door then belt), 2 = leaving cab (door).
+	if ((action == 1) || (action == 2)) play_wave_blocking(door_wave);
+	if ((action == 0) || (action == 1)) play_wave_blocking(belt_wave);
 	return 0;
 }
 
 void start_audio_sequence(const INT_PTR action)
 {
 	if (audio_thread) {
-		if (WaitForSingleObject(audio_thread, 0) == WAIT_TIMEOUT) {
-			return; // Do not overlap entry/startup sounds.
-		}
+		if (WaitForSingleObject(audio_thread, 0) == WAIT_TIMEOUT) return;
 		CloseHandle(audio_thread);
 		audio_thread = NULL;
 	}
 	audio_thread = CreateThread(NULL, 0, audio_thread_proc, reinterpret_cast<LPVOID>(action), 0, NULL);
-	if (! audio_thread) {
-		log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
-	}
+	if (!audio_thread) log_message(SCS_LOG_TYPE_warning, "unable to start truck audio thread (error %lu)", GetLastError());
 }
 
 void play(const uint8_t *const wave)
@@ -300,6 +352,10 @@ void init(void)
 	landing_sound = NULL;
 	next_footstep = 0;
 
+	door_wave = load_mp3_wave(L"takeawalk\\enter_sequence.mp3", door_wave_size);
+	belt_wave = load_mp3_wave(L"takeawalk\\seatbelt.mp3", belt_wave_size);
+	if (!door_wave) log_message(SCS_LOG_TYPE_warning, "door sound unavailable: enter_sequence.mp3 could not be decoded");
+	if (!belt_wave) log_message(SCS_LOG_TYPE_warning, "seatbelt sound unavailable: seatbelt.mp3 could not be decoded");
 	load_recordings();
 	if (footstep_count == 0) {
 		log_message(SCS_LOG_TYPE_warning, "no footstep recordings found in the plugin's \"takeawalk\" folder, using generated sounds");
@@ -324,6 +380,8 @@ void shutdown(void)
 	footstep_count = 0;
 	free(landing_sound);
 	landing_sound = NULL;
+	free(door_wave); door_wave = NULL; door_wave_size = 0;
+	free(belt_wave); belt_wave = NULL; belt_wave_size = 0;
 }
 
 void footstep(void)
@@ -340,19 +398,19 @@ void landing(void)
 	play(landing_sound);
 }
 
-// Truck door and seatbelt MP3 playback is temporarily disabled. The current
-// MCI playback path produces distorted audio on the user's ETS2 setup. Keep
-// footsteps/landing sounds enabled while the truck audio is replaced safely.
 void truck_entered(void)
 {
+	start_audio_sequence(1);
 }
 
 void truck_exited(void)
 {
+	start_audio_sequence(2);
 }
 
 void startup_buckle(void)
 {
+	start_audio_sequence(0);
 }
 
 } // namespace sound
