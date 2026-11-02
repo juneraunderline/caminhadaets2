@@ -133,6 +133,20 @@ bool camera_attach(void)
 	return true;
 }
 
+bool camera_current_placement(placement_t &placement)
+{
+	if (! manager_global) {
+		return false;
+	}
+	uint8_t *const camera_manager = manager();
+	uint32_t current = 0;
+	if (! camera_manager || ! memory::read(camera_manager + MANAGER_CURRENT_CAMERA, current)) {
+		return false;
+	}
+	uint8_t *const current_camera = camera(camera_manager, current);
+	return current_camera && memory::read(current_camera + CAMERA_PLACEMENT, placement) && plausible(placement);
+}
+
 bool camera_take(placement_t &reference)
 {
 	if (! manager_global || taken) {
