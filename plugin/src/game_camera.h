@@ -69,4 +69,7 @@ bool camera_shown(void);
  */
 void camera_release(void);
 
+/** Brief head dip and side glance to simulate fastening the seatbelt. */
+void camera_buckle_animation(void);
+
 } // namespace game
