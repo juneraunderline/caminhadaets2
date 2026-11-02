@@ -803,6 +803,42 @@ void on_toggle_pressed(void)
 }
 
 /**
+ * @brief Shows the exit prompt only when the parked cab camera is aimed at the driver's door.
+ */
+void update_cab_hint(void)
+{
+	static char previous[128] = "";
+	char hint[128] = "";
+	if (! game_paused && input::game_has_focus() && config.key_hint && can_leave_truck()) {
+		game::placement_t camera;
+		if (game::camera_current_placement(camera)) {
+			const double camera_x = static_cast<double>(camera.chunk_x) * game::CHUNK_SIZE + camera.position[0];
+			const double camera_z = static_cast<double>(camera.chunk_z) * game::CHUNK_SIZE + camera.position[2];
+			double door[3];
+			door_position(door);
+			const double dx = door[0] - camera_x;
+			const double dz = door[2] - camera_z;
+			const double distance = sqrt(dx * dx + dz * dz);
+			const float w = camera.rotation[0];
+			const float x = camera.rotation[1];
+			const float y = camera.rotation[2];
+			const float z = camera.rotation[3];
+			const float yaw = atan2f(2.0f * (w * y + x * z), 1.0f - 2.0f * (y * y + z * z));
+			const float forward_x = -sinf(yaw);
+			const float forward_z = -cosf(yaw);
+			const float facing = (distance > 0.001) ? static_cast<float>((dx * forward_x + dz * forward_z) / distance) : 1.0f;
+			if ((distance <= 7.0) && (facing >= 0.72f)) {
+				snprintf(hint, sizeof(hint), "[F9] Sair do caminhão");
+			}
+		}
+	}
+	if (strcmp(hint, previous) != 0) {
+		strcpy(previous, hint);
+		overlay::set_hint(hint);
+	}
+}
+
+/**
  * @brief Diagnostics: logs how many of the signs being shown are solid, by where they are.
  */
 bool count_signs(game::scenery_census_t &census)
@@ -972,6 +1008,9 @@ SCSAPI_VOID telemetry_frame_end(const scs_event_t, const void *const, const scs_
 	update_trace();
 	if (walk.active) {
 		update_walk();
+	}
+	else {
+		update_cab_hint();
 	}
 }
 
