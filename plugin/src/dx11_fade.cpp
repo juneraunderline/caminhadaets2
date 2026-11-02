@@ -248,7 +248,7 @@ void draw_fade(IDXGISwapChain *chain)
     context->OMSetBlendState(old_blend, old_blend_factor, old_sample_mask);
     context->OMSetDepthStencilState(old_depth_state, old_stencil_ref);
     context->RSSetState(old_raster);
-    if (old_viewport_count) context->RSSetViewports(old_viewport_count, old_viewports);
+    context->RSSetViewports(old_viewport_count, old_viewports);
     context->IASetInputLayout(old_layout);
     context->IASetPrimitiveTopology(old_topology);
     context->VSSetShader(old_vs, vs_classes, vs_count);
