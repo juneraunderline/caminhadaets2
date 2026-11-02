@@ -24,6 +24,9 @@ void show(const char *text);
  */
 void hide(void);
 
+/** Brief non-blocking fade over the game during cab/walking camera transitions. */
+void fade_transition(void);
+
 /** Shows or hides the first-person forearm/hand overlay while walking. */
 void set_hands(bool visible);
 
