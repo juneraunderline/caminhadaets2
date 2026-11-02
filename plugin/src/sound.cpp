@@ -340,19 +340,19 @@ void landing(void)
 	play(landing_sound);
 }
 
+// Truck door and seatbelt MP3 playback is temporarily disabled. The current
+// MCI playback path produces distorted audio on the user's ETS2 setup. Keep
+// footsteps/landing sounds enabled while the truck audio is replaced safely.
 void truck_entered(void)
 {
-	start_audio_sequence(1); // Door, then seatbelt.
 }
 
 void truck_exited(void)
 {
-	start_audio_sequence(2); // Door only.
 }
 
 void startup_buckle(void)
 {
-	start_audio_sequence(0); // Seatbelt only.
 }
 
 } // namespace sound
