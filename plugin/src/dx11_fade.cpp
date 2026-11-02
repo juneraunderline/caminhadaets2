@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <stdlib.h>
 
 #include "dx11_fade.h"
 #include "log.h"
