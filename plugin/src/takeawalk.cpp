@@ -634,6 +634,7 @@ void stop_walk(const bool game_closing)
 	overlay::set_hint(NULL);
 	walk.hint[0] = 0;
 	if (! game_closing) {
+		game::camera_buckle_animation();
 		sound::truck_entered();
 	}
 	log_message(SCS_LOG_TYPE_message, "back in the truck");
@@ -1016,6 +1017,7 @@ SCSAPI_VOID telemetry_frame_end(const scs_event_t, const void *const, const scs_
 	// At startup the driver is already seated: play only the seatbelt once.
 	if (! game_paused && ! startup_buckle_played) {
 		startup_buckle_played = true;
+		game::camera_buckle_animation();
 		sound::startup_buckle();
 	}
 
