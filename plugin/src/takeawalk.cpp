@@ -586,6 +586,10 @@ void start_walk(void)
 	walk.jump_key_was_down = false;
 	walk.probe_key_was_down = false;
 	walk.sign_key_was_down = false;
+	// Ask the game to load map collision around the exit point before locating
+	// the physics coordinate origin. On ETS2 1.61.1.9 the truck actor was missing
+	// from raycasts at startup even though static ground was already present.
+	activate_surroundings();
 	locate_physics();
 	activate_surroundings();
 	follow_ground(0.0f);
@@ -599,7 +603,8 @@ void start_walk(void)
 	QueryPerformanceCounter(&walk.last_update);
 	walk.active = true;
 	walk.time_without_camera = 0.0f;
-	overlay::set_hands(true);
+	// Keep the experimental 2D hand overlay disabled until camera placement is stable.
+	overlay::set_hands(false);
 	game::camera_set(walk.placement);
 
 	game::driver_set_hidden(config.hide_driver);
