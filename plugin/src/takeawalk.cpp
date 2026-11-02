@@ -31,7 +31,7 @@
 #include "physics_trace.h"
 #include "sound.h"
 
-#define TAKEAWALK_VERSION "0.23-dev"
+#define TAKEAWALK_VERSION "0.24-dev"
 
 namespace {
 
@@ -607,6 +607,7 @@ void start_walk(void)
 	// Keep the experimental 2D hand overlay disabled until camera placement is stable.
 	overlay::set_hands(false);
 	game::camera_set(walk.placement);
+	sound::truck_exited();
 
 	game::driver_set_hidden(config.hide_driver);
 	log_message(SCS_LOG_TYPE_message, "on foot");
