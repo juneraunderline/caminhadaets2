@@ -56,3 +56,6 @@ GOOD TO KNOW
   on (the walking camera needs it), then restores the previous settings when you get in.
 
 The README on GitHub has the full details.
+
+
+Truck sounds (0.23-dev): when returning to the cab, the door opening/closing audio plays, followed by the seatbelt sound. At the first live frame after starting the game, only the seatbelt audio plays because the driver already starts inside the truck. These are audio cues; they do not control the game's physical door or seatbelt simulation.
