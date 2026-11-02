@@ -321,8 +321,8 @@ DWORD WINAPI audio_thread_proc(LPVOID parameter)
 {
 	const INT_PTR action = reinterpret_cast<INT_PTR>(parameter);
 	// 0 = startup belt, 1 = entering cab (door then belt), 2 = leaving cab (door).
-	if ((action == 1) || (action == 2)) play_wave_blocking(door_wave);
-	if ((action == 0) || (action == 1)) play_wave_blocking(belt_wave);
+	if (config.door_sounds && ((action == 1) || (action == 2))) play_wave_blocking(door_wave);
+	if (config.seatbelt_sound && ((action == 0) || (action == 1))) play_wave_blocking(belt_wave);
 	return 0;
 }
 
